@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<launch>
+
+  <!-- Configuring control package-->
+  <node respawn="false" pkg="tcc" type="tcc_node" name="tcc" output="screen">
+      <param name="frame_id" type="string" value="world" />
+      <remap from="/vins_estimator/odometry" to="/raven/odom" />      
+  </node>
+</launch>
