@@ -19,12 +19,13 @@ void geoVec3toEigenVec3 (geometry_msgs::Vector3 geoVector3, Eigen::Vector3f& eig
 void geoPt3toEigenVec3 (geometry_msgs::Point geoPt3, Eigen::Vector3f& eigenVec3);
 Eigen::Vector3f prtcontrol(fullstate_t& cmd, fullstate_t& current);
 
-Eigen::Vector3f CtrlOmega(0.54, 0.54, 1.5); //norminal natural frequency
+Eigen::Vector3f CtrlOmega(1.0, 1.0, 1.3); //norminal natural frequency
 Eigen::Vector3f CtrlEpsilon(1, 1, 1); //tuning parameter
 Eigen::Vector3f CtrlZita(1, 1, 1.1); //damping ratio
 Eigen::Vector3f PosErrorAccumulated_(0, 0, 0);
-Eigen::Vector3f k_I_(0.01, 0.01, 0.2);
+Eigen::Vector3f k_I_(0.02, 0.02, 0.2);
 mppi_control::InLoopCmdGen InLoopCmdGen_(0.4);
+float posErrAccLimit_ = 15.0, acc_xy_limit_=5.0;
 float k_p_yaw_=0.02;
 
 int main(int argc, char** argv){
@@ -96,8 +97,8 @@ Eigen::Vector3f prtcontrol(fullstate_t& cmd, fullstate_t& current)
 { 
   PosErrorAccumulated_ += (cmd.pos - current.pos);
   for (int i =0; i<=2; i++){
-    if (PosErrorAccumulated_(i)>15.0f) PosErrorAccumulated_(i) = 15.0f;
-    else if (PosErrorAccumulated_(i)<-15.0f) PosErrorAccumulated_(i) = -15.0f;
+    if (PosErrorAccumulated_(i)>posErrAccLimit_) PosErrorAccumulated_(i) = posErrAccLimit_;
+    else if (PosErrorAccumulated_(i)<-posErrAccLimit_) PosErrorAccumulated_(i) = -posErrAccLimit_;
   }
   Eigen::Vector3f tarAcc;
   tarAcc(0) = pow(CtrlOmega(0)/CtrlEpsilon(0), 2)*(cmd.pos(0)-current.pos(0)) +
@@ -109,6 +110,11 @@ Eigen::Vector3f prtcontrol(fullstate_t& cmd, fullstate_t& current)
   tarAcc(2) = pow(CtrlOmega(2)/CtrlEpsilon(2), 2)*(cmd.pos(2)-current.pos(2)) +
              2*CtrlZita(2)*CtrlOmega(2)/CtrlEpsilon(2)*(cmd.vel(2)-current.vel(2)) + 
              cmd.acc(2) +  + k_I_(2)*PosErrorAccumulated_(2) + ONE_G;
+
+  if (tarAcc(0) >= acc_xy_limit_) tarAcc(0) = acc_xy_limit_;
+  else if (tarAcc(0) < -acc_xy_limit_) tarAcc(0) = -acc_xy_limit_;
+  if (tarAcc(1) >= acc_xy_limit_) tarAcc(1) = acc_xy_limit_;
+  else if (tarAcc(1) < -acc_xy_limit_) tarAcc(1) = -acc_xy_limit_;
   if (tarAcc(2) >= 2.0*ONE_G) tarAcc(2) = 2.0*ONE_G;
   else if (tarAcc(2) < 0.3*ONE_G) tarAcc(2) = 0.3*ONE_G;
   std::cout<<"trarget acc x: "<<tarAcc(0)<<"y: "<<tarAcc(1)<<"z: "<<tarAcc(2)<<"\n";
