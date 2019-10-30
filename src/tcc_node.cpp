@@ -19,11 +19,11 @@ void geoVec3toEigenVec3 (geometry_msgs::Vector3 geoVector3, Eigen::Vector3f& eig
 void geoPt3toEigenVec3 (geometry_msgs::Point geoPt3, Eigen::Vector3f& eigenVec3);
 Eigen::Vector3f prtcontrol(fullstate_t& cmd, fullstate_t& current);
 
-Eigen::Vector3f CtrlOmega(0.54, 0.54, 0.78); //norminal natural frequency
+Eigen::Vector3f CtrlOmega(0.54, 0.54, 1.5); //norminal natural frequency
 Eigen::Vector3f CtrlEpsilon(1, 1, 1); //tuning parameter
 Eigen::Vector3f CtrlZita(1, 1, 1.1); //damping ratio
 Eigen::Vector3f PosErrorAccumulated_(0, 0, 0);
-Eigen::Vector3f k_I_(0.00, 0.00, 0.05);
+Eigen::Vector3f k_I_(0.01, 0.01, 0.2);
 mppi_control::InLoopCmdGen InLoopCmdGen_(0.4);
 float k_p_yaw_=0.02;
 
@@ -95,6 +95,10 @@ void geoPt3toEigenVec3 (geometry_msgs::Point geoPt3, Eigen::Vector3f& eigenVec3)
 Eigen::Vector3f prtcontrol(fullstate_t& cmd, fullstate_t& current)
 { 
   PosErrorAccumulated_ += (cmd.pos - current.pos);
+  for (int i =0; i<=2; i++){
+    if (PosErrorAccumulated_(i)>15.0f) PosErrorAccumulated_(i) = 15.0f;
+    else if (PosErrorAccumulated_(i)<-15.0f) PosErrorAccumulated_(i) = -15.0f;
+  }
   Eigen::Vector3f tarAcc;
   tarAcc(0) = pow(CtrlOmega(0)/CtrlEpsilon(0), 2)*(cmd.pos(0)-current.pos(0)) +
              2*CtrlZita(0)*CtrlOmega(0)/CtrlEpsilon(0)*(cmd.vel(0)-current.vel(0)) + 
@@ -105,8 +109,8 @@ Eigen::Vector3f prtcontrol(fullstate_t& cmd, fullstate_t& current)
   tarAcc(2) = pow(CtrlOmega(2)/CtrlEpsilon(2), 2)*(cmd.pos(2)-current.pos(2)) +
              2*CtrlZita(2)*CtrlOmega(2)/CtrlEpsilon(2)*(cmd.vel(2)-current.vel(2)) + 
              cmd.acc(2) +  + k_I_(2)*PosErrorAccumulated_(2) + ONE_G;
-  if (tarAcc(2) >= 2.0*ONE_G) tarAcc(2) = 1.5*ONE_G;
-  else if (tarAcc(2) < -0.8*ONE_G) tarAcc(2) = -0.8*ONE_G;
+  if (tarAcc(2) >= 2.0*ONE_G) tarAcc(2) = 2.0*ONE_G;
+  else if (tarAcc(2) < 0.3*ONE_G) tarAcc(2) = 0.3*ONE_G;
   std::cout<<"trarget acc x: "<<tarAcc(0)<<"y: "<<tarAcc(1)<<"z: "<<tarAcc(2)<<"\n";
 
   return tarAcc;
@@ -150,7 +154,7 @@ void CtrloopCallback(const ros::TimerEvent&)
     rpyrt_msg.yaw_rate = wrapPi(-tarAtti_ned(2) + currentAtti_ned(2)) * k_p_yaw_;
     rpyrt_msg.thrust.x = 0;
     rpyrt_msg.thrust.y = 0;
-    rpyrt_msg.thrust.z = in_loop_cmd.T*100;
+    rpyrt_msg.thrust.z = in_loop_cmd.T;
     rpyt_command_pub.publish(rpyrt_msg);
 
   } else ROS_INFO_ONCE("ref trajectory lagging behind odom time!");
