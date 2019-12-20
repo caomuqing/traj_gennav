@@ -12,10 +12,10 @@ static const float ONE_G = 9.781;
 
 typedef struct fullstate_s{
     ros::Time timestamp;
-    Eigen::Vector3f pos;
-    Eigen::Vector3f vel;
-    Eigen::Vector3f acc;
-    Eigen::Matrix3f R;
+    Eigen::Vector3d pos;
+    Eigen::Vector3d vel;
+    Eigen::Vector3d acc;
+    Eigen::Matrix3d R;
     fullstate_s() {
         pos.setZero();
         vel.setZero();
@@ -24,6 +24,15 @@ typedef struct fullstate_s{
     }
 } fullstate_t;
 
+typedef struct flatstate_s{
+    ros::Time timestamp;
+    Eigen::Vector3d pos;
+    double yaw;
+    flatstate_s() {
+        pos.setZero();
+        yaw = 0;
+    }
+} flatstate_t;
 
 inline float wrapMax(float x, float max) {
     return fmodf(max + fmodf(x, max),max);
