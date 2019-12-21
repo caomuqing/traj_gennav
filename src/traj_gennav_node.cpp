@@ -160,6 +160,7 @@ void TimerCallback(const ros::TimerEvent&)
         std::cout<<"now in "<<_nSeg_wip<<" number of segment, time elapsed is "<<timeElasped<<
               "time in this segment is"<< timeElasped-_timeSum<<"\n";
         Eigen::Vector3d _pos, _vel, _acc;
+        double _yaw = 0.0;
         _pos.setZero();
         for (int i=0; i<3; i++){
           for (int k=0; k<2*dev_order_; k++){
@@ -170,7 +171,10 @@ void TimerCallback(const ros::TimerEvent&)
                         polyCoeff_(_nSeg_wip, i*2*dev_order_+ k) * std::pow(timeElasped-_timeSum, k-2):0);
           }
         }
-        
+        for (int k=0; k<2*dev_order_; k++){
+          _yaw += polyCoeff_(_nSeg_wip, 3*2*dev_order_+ k) * std::pow(timeElasped-_timeSum, k);
+        }
+        _yaw = wrapPi(_yaw);        
         trajectory_msgs::MultiDOFJointTrajectory trajset_msg;
         trajectory_msgs::MultiDOFJointTrajectoryPoint trajpt_msg;
         geometry_msgs::Transform transform_msg;
@@ -180,8 +184,8 @@ void TimerCallback(const ros::TimerEvent&)
         transform_msg.translation.z = _pos(2);
         transform_msg.rotation.x = 0;
         transform_msg.rotation.y = 0;
-        transform_msg.rotation.z = 0;
-        transform_msg.rotation.w = 1;
+        transform_msg.rotation.z = sinf(_yaw*0.5);
+        transform_msg.rotation.w = cosf(_yaw*0.5);
         trajpt_msg.transforms.push_back(transform_msg);
         vel_msg.linear.x = _vel(0);
         vel_msg.linear.y = _vel(1);
@@ -204,8 +208,8 @@ void TimerCallback(const ros::TimerEvent&)
         trajectory_odom.pose.pose.position.z = _pos(2);
         trajectory_odom.pose.pose.orientation.x = 0;
         trajectory_odom.pose.pose.orientation.y = 0;
-        trajectory_odom.pose.pose.orientation.z = 0;
-        trajectory_odom.pose.pose.orientation.w = 1;
+        trajectory_odom.pose.pose.orientation.z = sinf(_yaw*0.5);
+        trajectory_odom.pose.pose.orientation.w = cosf(_yaw*0.5);
 
         trajectory_sim_pub.publish(trajectory_odom);
       }
@@ -289,18 +293,23 @@ bool readFileCallback(std_srvs::Empty::Request& request, std_srvs::Empty::Respon
   ROS_INFO("Path loaded from file. Number of points in path: %d", num_wp);
 
   //conversion to matrix form
-  Eigen::MatrixXd initial_path(num_wp,3);  
+  Eigen::MatrixXd initial_path(num_wp,4);  
+  initial_path(0, 3) = initial_waypoints_[0].yaw;
   for (int i=0; i<num_wp; i++){
     initial_path(i, 0) = initial_waypoints_[i].pos(0);
     initial_path(i, 1) = initial_waypoints_[i].pos(1);
     initial_path(i, 2) = initial_waypoints_[i].pos(2);
+
+    if (i+1<num_wp)
+      initial_path(i+1, 3) = initial_path(i, 3) + 
+                            wrapPi(initial_waypoints_[i+1].yaw - initial_path(i, 3));
   }
 
   std::cout<<"initial_path is "<<initial_path<<"\n";
   TrajectoryGeneratorWaypoint  trajectoryGeneratorWaypoint;
   
-  Eigen::MatrixXd vel = Eigen::MatrixXd::Zero(2, 3);  //start and end velocity as zero
-  Eigen::MatrixXd acc = Eigen::MatrixXd::Zero(2, 3);  //start and end acceleration as zero
+  Eigen::MatrixXd vel = Eigen::MatrixXd::Zero(2, 4);  //start and end velocity as zero
+  Eigen::MatrixXd acc = Eigen::MatrixXd::Zero(2, 4);  //start and end acceleration as zero
 
   // give an arbitraty time allocation, all set all durations as 1 in the commented function.
   ROS_INFO("Start solving for trajectory...");

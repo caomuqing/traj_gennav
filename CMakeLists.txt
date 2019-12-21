@@ -29,7 +29,6 @@ find_package(catkin REQUIRED COMPONENTS
   mav_msgs
   message_generation
   geodetic_utils
-  ooqp_eigen_interface
 )
 
 find_package(Eigen3 REQUIRED)

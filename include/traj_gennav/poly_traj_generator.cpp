@@ -50,7 +50,9 @@ Eigen::MatrixXd TrajectoryGeneratorWaypoint::PolyQPGenerationClosedForm(
     int p_num1d   = p_order + 1;                  // the number of variables in each segment
 
     int m = Time.size();                          // the number of segments
-    MatrixXd PolyCoeff = MatrixXd::Zero(m, 3 * p_num1d);           // position(x,y,z), so we need (3 * p_num1d) coefficients
+    int dim = Path.row(0).size(); //generalized dimension
+
+    MatrixXd PolyCoeff = MatrixXd::Zero(m, dim * p_num1d);           // position(x,y,z), so we need (3 * p_num1d) coefficients
     VectorXd Px(p_num1d * m), Py(p_num1d * m), Pz(p_num1d * m);
 
     /*   Produce Mapping Matrix A to the entire trajectory, A is a mapping matrix that maps polynomial coefficients to derivatives.   */
@@ -69,7 +71,6 @@ Eigen::MatrixXd TrajectoryGeneratorWaypoint::PolyQPGenerationClosedForm(
     //std::cout<< "matrix A is \n"<< A <<"\n";
     /*   Produce the dereivatives in X, Y and Z axis directly.  */
     
-    int dim = Path.row(0).size(); //generalized dimension
     MatrixXd df = MatrixXd::Zero(m-1+2*d_order, dim);
     for (int i=0; i<dim; i++){
         df(0, i) = Path(0,i);    //p0
