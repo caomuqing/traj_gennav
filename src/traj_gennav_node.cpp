@@ -50,16 +50,16 @@ int main(int argc, char** argv){
     ROS_WARN("Error: path parameter arrays are not the same size");
   }
 
-  rpyt_command_pub = nh.advertise<mav_msgs::RollPitchYawrateThrust>(
-                                    "/firefly/command/roll_pitch_yawrate_thrust1", 50);
+  // rpyt_command_pub = nh.advertise<mav_msgs::RollPitchYawrateThrust>(
+  //                                   "/firefly/command/roll_pitch_yawrate_thrust1", 50);
   trajectory_pub = nh.advertise<trajectory_msgs::MultiDOFJointTrajectory>(
-                                    "/command/trajectory", 50);
+                                    "/firefly/command/trajectory", 50);
 
-  ros::Subscriber trajectory_sub = nh.subscribe<trajectory_msgs::MultiDOFJointTrajectory>(
-                                   "/firefly/command/trajectory", 10, trajectory_cb);
+  //ros::Subscriber trajectory_sub = nh.subscribe<trajectory_msgs::MultiDOFJointTrajectory>(
+  //                                 "/firefly/command/trajectory", 10, trajectory_cb);
   ros::Subscriber odom_sub = nh.subscribe<nav_msgs::Odometry>("/vins_estimator/odometry", 10, odom_cb);
 
-  ros::Timer timer = nh.createTimer(ros::Duration(1.0/10), TimerCallback);
+  ros::Timer timer = nh.createTimer(ros::Duration(1.0/100), TimerCallback);
 
   read_service_ = nh.advertiseService("readfile", readFileCallback);
 
@@ -71,28 +71,39 @@ int main(int argc, char** argv){
   return 0;
 }
 
-void trajectory_cb(const trajectory_msgs::MultiDOFJointTrajectory::ConstPtr& msg)
-{
-  cmd_.timestamp = ros::Time::now();
-  geoVec3toEigenVec3(msg->points[0].transforms[0].translation, cmd_.pos);
-  geoVec3toEigenVec3(msg->points[0].velocities[0].linear, cmd_.vel);
-  geoVec3toEigenVec3(msg->points[0].accelerations[0].linear, cmd_.acc);
-  Eigen::Quaternion<double> cmd_Quat(msg->points[0].transforms[0].rotation.w, 
-                                    msg->points[0].transforms[0].rotation.x, 
-                                    msg->points[0].transforms[0].rotation.y, 
-                                    msg->points[0].transforms[0].rotation.z);
-  get_dcm_from_q(cmd_.R, cmd_Quat);
-  //std::cout<<"trarget pos x: "<<cmd_.pos(0)<<"y: "<<cmd_.pos(1)<<"z: "<<cmd_.pos(2)<<"\n";
-  ROS_INFO_ONCE("Got first trajectory message!");
+// void trajectory_cb(const trajectory_msgs::MultiDOFJointTrajectory::ConstPtr& msg)
+// {
+//   cmd_.timestamp = ros::Time::now();
+//   geoVec3toEigenVec3(msg->points[0].transforms[0].translation, cmd_.pos);
+//   geoVec3toEigenVec3(msg->points[0].velocities[0].linear, cmd_.vel);
+//   geoVec3toEigenVec3(msg->points[0].accelerations[0].linear, cmd_.acc);
+//   Eigen::Quaternion<double> cmd_Quat(msg->points[0].transforms[0].rotation.w, 
+//                                     msg->points[0].transforms[0].rotation.x, 
+//                                     msg->points[0].transforms[0].rotation.y, 
+//                                     msg->points[0].transforms[0].rotation.z);
+//   get_dcm_from_q(cmd_.R, cmd_Quat);
+//   //std::cout<<"trarget pos x: "<<cmd_.pos(0)<<"y: "<<cmd_.pos(1)<<"z: "<<cmd_.pos(2)<<"\n";
+//   ROS_INFO_ONCE("Got first trajectory message!");
 
-}
+// }
 
 void odom_cb(const nav_msgs::Odometry::ConstPtr& msg)
 {
   got_odom_ = true;
   current_odom_.timestamp = ros::Time::now();
   geoPt3toEigenVec3(msg->pose.pose.position, current_odom_.pos);
-  geoVec3toEigenVec3(msg->twist.twist.linear, current_odom_.vel);
+
+  if (false){
+    geoVec3toEigenVec3(msg->twist.twist.linear, current_odom_.vel);
+  } else {
+    Eigen::Quaterniond orientation_W_B(msg->pose.pose.orientation.w, msg->pose.pose.orientation.x, 
+                                       msg->pose.pose.orientation.y, msg->pose.pose.orientation.z);
+    Eigen::Vector3d velocity_body(msg->twist.twist.linear.x, msg->twist.twist.linear.y, msg->twist.twist.linear.z);
+    Eigen::Vector3d velocity_world = orientation_W_B *velocity_body;    
+    current_odom_.vel = velocity_world;
+  }
+
+
   Eigen::Quaternion<double> current_Quat(msg->pose.pose.orientation.w, msg->pose.pose.orientation.x, 
                                         msg->pose.pose.orientation.y, msg->pose.pose.orientation.z);
   get_dcm_from_q(current_odom_.R, current_Quat);

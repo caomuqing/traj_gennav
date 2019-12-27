@@ -20,7 +20,7 @@
 #include <std_srvs/Empty.h>
 
 
-ros::Publisher rpyt_command_pub;
+//ros::Publisher rpyt_command_pub;
 ros::Publisher trajectory_sim_pub, trajectory_pub;
 fullstate_t cmd_, current_odom_;
 ros::ServiceServer read_service_;
@@ -83,7 +83,7 @@ geodetic_converter::GeodeticConverter geodetic_converter_;
 
 
 void TimerCallback(const ros::TimerEvent&);
-void trajectory_cb(const trajectory_msgs::MultiDOFJointTrajectory::ConstPtr& msg);
+// void trajectory_cb(const trajectory_msgs::MultiDOFJointTrajectory::ConstPtr& msg);
 void odom_cb(const nav_msgs::Odometry::ConstPtr& msg);
 void geoVec3toEigenVec3 (geometry_msgs::Vector3 geoVector3, Eigen::Vector3f& eigenVec3);
 void geoVec3toEigenVec3 (geometry_msgs::Vector3 geoVector3, Eigen::Vector3d& eigenVec3);
