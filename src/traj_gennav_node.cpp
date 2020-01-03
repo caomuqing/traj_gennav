@@ -173,6 +173,8 @@ void TimerCallback(const ros::TimerEvent&)
         Eigen::Vector3d _pos, _vel, _acc;
         double _yaw = 0.0;
         _pos.setZero();
+        _vel.setZero();
+        _acc.setZero();
         for (int i=0; i<3; i++){
           for (int k=0; k<2*dev_order_; k++){
             _pos(i) += polyCoeff_(_nSeg_wip, i*2*dev_order_+ k) * std::pow(timeElasped-_timeSum, k);
