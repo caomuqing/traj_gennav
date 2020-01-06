@@ -18,7 +18,12 @@
 #include <mav_msgs/default_topics.h>
 #include <geodetic_utils/geodetic_conv.hpp>
 #include <std_srvs/Empty.h>
+#include <std_msgs/Float32MultiArray.h>
+#include <rviz_visual_tools/rviz_visual_tools.h>
+#include "Plane.h"
 
+using namespace rviz_visual_tools;
+rviz_visual_tools::RvizVisualToolsPtr visual_tools_;
 
 //ros::Publisher rpyt_command_pub;
 ros::Publisher trajectory_sim_pub, trajectory_pub;
@@ -60,7 +65,7 @@ double takeoff_height_;
 // Height for landing command [m].
 double landing_height_;
 int dev_order_;
-
+int nSeg_wip_ = 0;
 
 // A list of waypoints to visit.
 // [x,y,z,heading]
@@ -77,29 +82,24 @@ ros::Time trajectory_start_time_;
 size_t current_leg_;
 
 const double kIntermediatePoseTolerance = 0.5;
+double kDistanceFromBuilding = 5.0;
 
 geodetic_converter::GeodeticConverter geodetic_converter_;
 
-
+Eigen::Vector3d planeBodyABC_(0.0, 0.0, 0.0);
+double planeBodyD_ = 0.0;
+ros::Time last_wall_msg_time_;
+bool wall_msg_updated_;
 
 void TimerCallback(const ros::TimerEvent&);
+void ReplanTimerCallback(const ros::TimerEvent&);
 // void trajectory_cb(const trajectory_msgs::MultiDOFJointTrajectory::ConstPtr& msg);
 void odom_cb(const nav_msgs::Odometry::ConstPtr& msg);
+void wall_cb(const std_msgs::Float32MultiArray::ConstPtr& msg);
 void geoVec3toEigenVec3 (geometry_msgs::Vector3 geoVector3, Eigen::Vector3f& eigenVec3);
 void geoVec3toEigenVec3 (geometry_msgs::Vector3 geoVector3, Eigen::Vector3d& eigenVec3);
 void geoPt3toEigenVec3 (geometry_msgs::Point geoPt3, Eigen::Vector3f& eigenVec3);
 void geoPt3toEigenVec3 (geometry_msgs::Point geoPt3, Eigen::Vector3d& eigenVec3);
 Eigen::VectorXd timeAllocation(Eigen::MatrixXd Path);
-
-// Eigen::Vector3f prtcontrol(fullstate_t& cmd, fullstate_t& current);
-
-Eigen::Vector3f CtrlOmega(1.0, 1.0, 1.3); //norminal natural frequency
-Eigen::Vector3f CtrlEpsilon(1, 1, 1); //tuning parameter
-Eigen::Vector3f CtrlZita(1, 1, 1.1); //damping ratio
-Eigen::Vector3f PosErrorAccumulated_(0, 0, 0);
-Eigen::Vector3f k_I_(0.02, 0.02, 0.2);
-mppi_control::InLoopCmdGen InLoopCmdGen_(0.4);
-float posErrAccLimit_ = 15.0, acc_xy_limit_=5.0;
-float k_p_yaw_=0.02;
 
 #endif  // TRAJ_GENNAV_NODE_H

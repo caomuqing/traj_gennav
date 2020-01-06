@@ -29,6 +29,7 @@ find_package(catkin REQUIRED COMPONENTS
   mav_msgs
   message_generation
   geodetic_utils
+  rviz_visual_tools
 )
 
 find_package(Eigen3 REQUIRED)
@@ -99,7 +100,9 @@ include_directories(
 
 add_executable(
   ${PROJECT_NAME}_node src/traj_gennav_node.cpp
-  include/traj_gennav/poly_traj_generator.cpp)
+  include/traj_gennav/poly_traj_generator.cpp
+  include/traj_gennav/Vec3f.cpp
+  include/traj_gennav/Plane.cpp)
 
 
 # set_target_properties(${PROJECT_NAME}_node PROPERTIES OUTPUT_NAME node PREFIX "")
