@@ -77,7 +77,8 @@ bool got_odom_ = false;
 bool trajectory_obtained_ = false;
 bool start_trajectory_ = false;
 bool trajectory_wip_ = false;
-ros::Time trajectory_start_time_;
+bool idle_state_ = false;
+ros::Time trajectory_start_time_(0.001);
 
 size_t current_leg_;
 
@@ -86,8 +87,14 @@ double kDistanceFromBuilding = 5.0;
 
 geodetic_converter::GeodeticConverter geodetic_converter_;
 
+Eigen::Vector3d planeWorldABC_(0.0, 0.0, 0.0);
+double planeWorldD_ = 0.0;
 Eigen::Vector3d planeBodyABC_(0.0, 0.0, 0.0);
 double planeBodyD_ = 0.0;
+Eigen::Vector3d planeWorldABC_Est_(0.0, 0.0, 0.0);
+double planeWorldD_Est_ = 0.0;
+double est_K_ = 0.7;
+
 ros::Time last_wall_msg_time_;
 bool wall_msg_updated_;
 
@@ -101,5 +108,6 @@ void geoVec3toEigenVec3 (geometry_msgs::Vector3 geoVector3, Eigen::Vector3d& eig
 void geoPt3toEigenVec3 (geometry_msgs::Point geoPt3, Eigen::Vector3f& eigenVec3);
 void geoPt3toEigenVec3 (geometry_msgs::Point geoPt3, Eigen::Vector3d& eigenVec3);
 Eigen::VectorXd timeAllocation(Eigen::MatrixXd Path);
+trajectory_msgs::MultiDOFJointTrajectory generateTraj(double timeinTraj, double T_s, int horizon);
 
 #endif  // TRAJ_GENNAV_NODE_H

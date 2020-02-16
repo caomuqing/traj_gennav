@@ -112,6 +112,34 @@ void wall_cb(const std_msgs::Float32MultiArray::ConstPtr& msg)
   planeBodyD_ = msg->data[3];
   last_wall_msg_time_ = ros::Time::now();
   wall_msg_updated_ = true;
+
+  //rotate plane coefficients to world frame
+  Eigen::MatrixXd _R_lidar_body(3,3);
+  _R_lidar_body.setZero();
+  _R_lidar_body(0,0) = 1;
+  _R_lidar_body(1,1) = -1;
+  _R_lidar_body(2,2) = -1;
+  Eigen::Vector3d x_0_body(0, 0, -planeBodyD_/planeBodyABC_(2));
+  Eigen::Vector3d x_0_world = (current_odom_.R) * 
+                              (_R_lidar_body * x_0_body + current_odom_.pos);
+  Eigen::Vector3d planeWorldABC_ = (current_odom_.R * _R_lidar_body) * planeBodyABC_ ;
+  planeWorldABC_ = planeWorldABC_/planeWorldABC_.norm(); //normalization
+  double planeWorldD_ = -planeWorldABC_.dot(x_0_world);                             
+
+  //double planeWorldD = planeBodyD_ - planeBodyABC_.dot(current_odom_.pos);
+  visual_tools_->deleteAllMarkers();
+  visual_tools_->publishABCDPlane(planeWorldABC_(0), planeWorldABC_(1), planeWorldABC_(2), 
+                                  planeWorldD_, rviz_visual_tools::BLUE, 5.0, 5.0);
+
+  // Plane _facadePlane(planeWorldABC(0), planeWorldABC(1), planeWorldABC(2), planeWorldD);
+  // Vec3f _curPos(current_odom_.pos(0), current_odom_.pos(1), current_odom_.pos(2));
+  // Vec3f _facadeNormalXY(planeWorldABC(0), planeWorldABC(1), 0.0f); //we keep only xy direction
+  // Vec3f _intersectPt = _facadePlane.IntersectLine(_curPos, _curPos +_facadeNormalXY);
+  // Vec3f _projectPt = _intersectPt + Vec3f::Normalize(_curPos - _intersectPt) * kDistanceFromBuilding;
+  // float _replanSurfaceD = -Vec3f::Dot(_facadeNormalXY, _projectPt);
+  // visual_tools_->publishABCDPlane(_facadeNormalXY.x, _facadeNormalXY.y, _facadeNormalXY.z, 
+  //                                 _replanSurfaceD, rviz_visual_tools::RED, 5.0, 5.0);
+  visual_tools_->trigger();  //publish plane for testing purpose only
 }
 
 // void geoQuatoEigenQua (geometry_msgs::Quaternion geoQua, Eigen::Quaternion& eigenQua)
@@ -122,40 +150,16 @@ void ReplanTimerCallback(const ros::TimerEvent&)
 {
   if (got_odom_ && wall_msg_updated_ && trajectory_wip_){
     wall_msg_updated_ = false;
-    Eigen::MatrixXd _R_lidar_body(3,3);
-    _R_lidar_body.setZero();
-    _R_lidar_body(0,0) = 1;
-    _R_lidar_body(1,1) = -1;
-    _R_lidar_body(2,2) = -1;
-    Eigen::Vector3d x_0_body(0, 0, -planeBodyD_/planeBodyABC_(2));
-    Eigen::Vector3d x_0_world = (current_odom_.R) * 
-                                (_R_lidar_body * x_0_body + current_odom_.pos);
-    Eigen::Vector3d planeWorldABC = (current_odom_.R * _R_lidar_body) * planeBodyABC_ ;
-    double planeWorldD = -planeWorldABC.dot(x_0_world);                             
 
-    //double planeWorldD = planeBodyD_ - planeBodyABC_.dot(current_odom_.pos);
-    visual_tools_->deleteAllMarkers();
-    visual_tools_->publishABCDPlane(planeWorldABC(0), planeWorldABC(1), planeWorldABC(2), 
-                                    planeWorldD, rviz_visual_tools::BLUE, 5.0, 5.0);
 
-    Plane _facadePlane(planeWorldABC(0), planeWorldABC(1), planeWorldABC(2), planeWorldD);
-    Vec3f _curPos(current_odom_.pos(0), current_odom_.pos(1), current_odom_.pos(2));
-    Vec3f _facadeNormalXY(planeWorldABC(0), planeWorldABC(1), 0.0f); //we keep only xy direction
-    Vec3f _intersectPt = _facadePlane.IntersectLine(_curPos, _curPos +_facadeNormalXY);
-    Vec3f _projectPt = _intersectPt + Vec3f::Normalize(_curPos - _intersectPt) * kDistanceFromBuilding;
-    float _replanSurfaceD = -Vec3f::Dot(_facadeNormalXY, _projectPt);
-    visual_tools_->publishABCDPlane(_facadeNormalXY.x, _facadeNormalXY.y, _facadeNormalXY.z, 
-                                    _replanSurfaceD, rviz_visual_tools::RED, 5.0, 5.0);
-    visual_tools_->trigger();  //publish plane for testing purpose only
+    // if ((_curPos - _projectPt).length() > 0.8f) {
+    //   ROS_INFO("triggering replanning..")
 
-    if ((_curPos - _projectPt).length() > 0.8f) {
-      ROS_INFO("triggering replanning..")
-
-      ROS_INFO("Start solving for trajectory...");
-      MatrixXd _updated_path(x,4)
-      polyTime_  = timeAllocation(initial_path);
-      polyCoeff_ = trajectoryGeneratorWaypoint.PolyQPGenerationClosedForm(dev_order_, _updated_path, vel, acc, polyTime_);
-    }
+    //   ROS_INFO("Start solving for trajectory...");
+    //   MatrixXd _updated_path(x,4)
+    //   polyTime_  = timeAllocation(initial_path);
+    //   polyCoeff_ = trajectoryGeneratorWaypoint.PolyQPGenerationClosedForm(dev_order_, _updated_path, vel, acc, polyTime_);
+    // }
 
   }
 }
@@ -168,87 +172,125 @@ void TimerCallback(const ros::TimerEvent&)
     }
   }
 
+  if (wall_msg_updated_){
+    planeWorldABC_Est_ = (1-est_K_)*planeWorldABC_Est_ + est_K_*planeWorldABC_;
+    planeWorldD_Est_ = (1-est_K_)*planeWorldD_Est_ + est_K_*planeWorldD_;
+    wall_msg_updated_ = false;
+  }
+
   if (start_trajectory_){
-    if (trajectory_wip_){
-      double timeElasped = (ros::Time::now() - trajectory_start_time_).toSec();
-      if (timeElasped > polyTime_.sum()){
-        ROS_INFO("Finished publishing trajectory.");
-        trajectory_wip_ = false;
-        start_trajectory_ = false;
-      } else {  //find which segment it is at and publish accordingly
-        int _nSeg = polyTime_.size();
-        int nSeg_wip_;
-        double _timeSum = 0.0;
-        for (int k=0; k<_nSeg; k++){
-          if (timeElasped < _timeSum +polyTime_[k]){
-            nSeg_wip_ = k;
-            break;
-          } else _timeSum += polyTime_[k];
-        }
-        std::cout<<"now in "<<nSeg_wip_<<" number of segment, time elapsed is "<<timeElasped<<
-              "time in this segment is"<< timeElasped-_timeSum<<"\n";
-        Eigen::Vector3d _pos, _vel, _acc;
-        double _yaw = 0.0;
-        _pos.setZero();
-        _vel.setZero();
-        _acc.setZero();
-        for (int i=0; i<3; i++){
-          for (int k=0; k<2*dev_order_; k++){
-            _pos(i) += polyCoeff_(nSeg_wip_, i*2*dev_order_+ k) * std::pow(timeElasped-_timeSum, k);
-            _vel(i) += (k>0? k*
-                        polyCoeff_(nSeg_wip_, i*2*dev_order_+ k) * std::pow(timeElasped-_timeSum, k-1):0);
-            _acc(i) += (k>1? k*(k-1)*
-                        polyCoeff_(nSeg_wip_, i*2*dev_order_+ k) * std::pow(timeElasped-_timeSum, k-2):0);
-          }
-        }
-        for (int k=0; k<2*dev_order_; k++){
-          _yaw += polyCoeff_(nSeg_wip_, 3*2*dev_order_+ k) * std::pow(timeElasped-_timeSum, k);
-        }
-        _yaw = wrapPi(_yaw);        
-        trajectory_msgs::MultiDOFJointTrajectory trajset_msg;
-        trajectory_msgs::MultiDOFJointTrajectoryPoint trajpt_msg;
-        geometry_msgs::Transform transform_msg;
-        geometry_msgs::Twist accel_msg, vel_msg;
-        transform_msg.translation.x = _pos(0);
-        transform_msg.translation.y = _pos(1);
-        transform_msg.translation.z = _pos(2);
-        transform_msg.rotation.x = 0;
-        transform_msg.rotation.y = 0;
-        transform_msg.rotation.z = sinf(_yaw*0.5);
-        transform_msg.rotation.w = cosf(_yaw*0.5);
-        trajpt_msg.transforms.push_back(transform_msg);
-        vel_msg.linear.x = _vel(0);
-        vel_msg.linear.y = _vel(1);
-        vel_msg.linear.z = _vel(2);
-        accel_msg.linear.x = _acc(0);
-        accel_msg.linear.x = _acc(1);
-        accel_msg.linear.x = _acc(2);
-        trajpt_msg.velocities.push_back(vel_msg);
-        trajpt_msg.accelerations.push_back(accel_msg);
-        trajset_msg.points.push_back(trajpt_msg);
-        trajectory_pub.publish(trajset_msg);
-        
-        // for testing
-        //_pos = getPosPoly(polyCoeff_, nSeg_wip_, timeElasped-_timeSum);
-        nav_msgs::Odometry trajectory_odom;
-        trajectory_odom.header.stamp = ros::Time::now();
-        trajectory_odom.header.frame_id = frame_id_;
-        trajectory_odom.pose.pose.position.x = _pos(0);
-        trajectory_odom.pose.pose.position.y = _pos(1);
-        trajectory_odom.pose.pose.position.z = _pos(2);
-        trajectory_odom.pose.pose.orientation.x = 0;
-        trajectory_odom.pose.pose.orientation.y = 0;
-        trajectory_odom.pose.pose.orientation.z = sinf(_yaw*0.5);
-        trajectory_odom.pose.pose.orientation.w = cosf(_yaw*0.5);
-
-        trajectory_sim_pub.publish(trajectory_odom);
-      }
-
-    } else {
+    if (!trajectory_wip_){
       trajectory_start_time_ = ros::Time::now();
       trajectory_wip_ = true;
+      //return;
+    }
+    double timeElasped = (ros::Time::now() - trajectory_start_time_).toSec();
+    if (timeElasped > polyTime_.sum()){
+      trajectory_wip_ = false;
+      start_trajectory_ = false;
+      idle_state_ = true;      
+    }      
+
+    trajectory_msgs::MultiDOFJointTrajectory trajset_msg = generateTraj(timeElasped, 0.01, 20);  
+    trajectory_pub.publish(trajset_msg);
+        
+        // for testing
+        // //_pos = getPosPoly(polyCoeff_, nSeg_wip_, timeElasped-_timeSum);
+
+        // nav_msgs::Odometry trajectory_odom;
+        // trajectory_odom.header.stamp = ros::Time::now();
+        // trajectory_odom.header.frame_id = frame_id_;
+        // trajectory_odom.pose.pose.position.x = _pos(0);
+        // trajectory_odom.pose.pose.position.y = _pos(1);
+        // trajectory_odom.pose.pose.position.z = _pos(2);
+        // trajectory_odom.pose.pose.orientation.x = 0;
+        // trajectory_odom.pose.pose.orientation.y = 0;
+        // trajectory_odom.pose.pose.orientation.z = sinf(_yaw*0.5);
+        // trajectory_odom.pose.pose.orientation.w = cosf(_yaw*0.5);
+
+        // trajectory_sim_pub.publish(trajectory_odom);
+
+  } else if (idle_state_){
+    if (trajectory_start_time_!= ros::Time(0.001)){
+      ROS_INFO_ONCE("Just hold position then...");
+      double timeElasped = (ros::Time::now() - trajectory_start_time_).toSec();
+      trajectory_msgs::MultiDOFJointTrajectory trajset_msg = generateTraj(timeElasped, 0.01, 20);  
+      trajectory_pub.publish(trajset_msg);        
     }
   }
+}
+
+trajectory_msgs::MultiDOFJointTrajectory generateTraj(double timeinTraj, double T_s, int horizon)
+{
+  Eigen::Vector3d _pos, _vel, _acc;
+  double _yaw = 0.0;
+  _pos.setZero();
+  _vel.setZero();
+  _acc.setZero();
+  trajectory_msgs::MultiDOFJointTrajectory trajset_msg;
+
+  for (int n = 0; n<horizon; n++){
+    double _timeinTraj = timeinTraj + n*T_s;
+
+    if (_timeinTraj > polyTime_.sum()){
+      if (n==0) ROS_INFO("Finished publishing trajectory. Hold position instead.");
+
+      _pos = initial_waypoints_.back().pos; //set pos and yaw as the final waypoint
+      _yaw = initial_waypoints_.back().yaw;
+      _vel.setZero();
+      _acc.setZero();
+
+    } else {  //find which segment it is at and publish accordingly
+      int _nSeg = polyTime_.size();
+      int nSeg_wip_;
+      double _timeSum = 0.0;
+      for (int k=0; k<_nSeg; k++){
+        if (_timeinTraj < _timeSum +polyTime_[k]){
+          nSeg_wip_ = k;
+          break;
+        } else _timeSum += polyTime_[k];
+      }
+      if (n==0) {
+        std::cout<<"now in "<<nSeg_wip_<<" number of segment, time elapsed is "<<_timeinTraj<<
+              "time in this segment is"<< _timeinTraj-_timeSum<<"\n";        
+      }
+      for (int i=0; i<3; i++){
+        for (int k=0; k<2*dev_order_; k++){
+          _pos(i) += polyCoeff_(nSeg_wip_, i*2*dev_order_+ k) * std::pow(_timeinTraj-_timeSum, k);
+          _vel(i) += (k>0? k*
+                      polyCoeff_(nSeg_wip_, i*2*dev_order_+ k) * std::pow(_timeinTraj-_timeSum, k-1):0);
+          _acc(i) += (k>1? k*(k-1)*
+                      polyCoeff_(nSeg_wip_, i*2*dev_order_+ k) * std::pow(_timeinTraj-_timeSum, k-2):0);
+        }
+      }
+      for (int k=0; k<2*dev_order_; k++){
+        _yaw += polyCoeff_(nSeg_wip_, 3*2*dev_order_+ k) * std::pow(_timeinTraj-_timeSum, k);
+      }
+      _yaw = wrapPi(_yaw);        
+    }
+
+    trajectory_msgs::MultiDOFJointTrajectoryPoint trajpt_msg;
+    geometry_msgs::Transform transform_msg;
+    geometry_msgs::Twist accel_msg, vel_msg;
+    transform_msg.translation.x = _pos(0);
+    transform_msg.translation.y = _pos(1);
+    transform_msg.translation.z = _pos(2);
+    transform_msg.rotation.x = 0;
+    transform_msg.rotation.y = 0;
+    transform_msg.rotation.z = sinf(_yaw*0.5);
+    transform_msg.rotation.w = cosf(_yaw*0.5);
+    trajpt_msg.transforms.push_back(transform_msg);
+    vel_msg.linear.x = _vel(0);
+    vel_msg.linear.y = _vel(1);
+    vel_msg.linear.z = _vel(2);
+    accel_msg.linear.x = _acc(0);
+    accel_msg.linear.x = _acc(1);
+    accel_msg.linear.x = _acc(2);
+    trajpt_msg.velocities.push_back(vel_msg);
+    trajpt_msg.accelerations.push_back(accel_msg);
+    trajset_msg.points.push_back(trajpt_msg);
+  }
+  return trajset_msg;
 }
 
 bool readFileCallback(std_srvs::Empty::Request& request, std_srvs::Empty::Response& response)
@@ -257,6 +299,9 @@ bool readFileCallback(std_srvs::Empty::Request& request, std_srvs::Empty::Respon
   //   ROS_WARN("NO ODOM, WILL NOT CALCULATE TRAJECTORY");
   //   return false;
   // }
+  start_trajectory_ = false;
+  idle_state_ = true;
+  trajectory_wip_ = false;
   initial_waypoints_.clear();
   addCurrentOdometryWaypoint();
 
@@ -363,6 +408,7 @@ bool executePathCallback(std_srvs::Empty::Request& request, std_srvs::Empty::Res
 
   if (trajectory_obtained_){
     start_trajectory_ = true;
+    idle_state_ = false;
     return true;
   } else return false;
   
