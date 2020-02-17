@@ -21,6 +21,8 @@ int main(int argc, char** argv){
     ROS_WARN("Error loading parameters!");
 
   nh.param("derivative_order", dev_order_, 3);
+  nh.param("desired_distance", desired_distance_s_, 5.0);
+
   if (coordinate_type_ == "gps" || coordinate_type_ == "enu") {
   } else {
     ROS_WARN("Unknown coordinate type - please enter 'gps' or 'enu'.");
@@ -122,9 +124,13 @@ void wall_cb(const std_msgs::Float32MultiArray::ConstPtr& msg)
   Eigen::Vector3d x_0_body(0, 0, -planeBodyD_/planeBodyABC_(2));
   Eigen::Vector3d x_0_world = (current_odom_.R) * 
                               (_R_lidar_body * x_0_body + current_odom_.pos);
-  Eigen::Vector3d planeWorldABC_ = (current_odom_.R * _R_lidar_body) * planeBodyABC_ ;
+  planeWorldABC_ = (current_odom_.R * _R_lidar_body) * planeBodyABC_ ;
   planeWorldABC_ = planeWorldABC_/planeWorldABC_.norm(); //normalization
-  double planeWorldD_ = -planeWorldABC_.dot(x_0_world);                             
+  planeWorldD_ = -planeWorldABC_.dot(x_0_world);     
+  if (planeWorldABC_.dot(current_odom_.pos) + planeWorldD_ < 0){
+    planeWorldABC_ = -planeWorldABC_;
+    planeWorldD_ = -planeWorldD_;
+  }                        
 
   //double planeWorldD = planeBodyD_ - planeBodyABC_.dot(current_odom_.pos);
   visual_tools_->deleteAllMarkers();
@@ -149,7 +155,7 @@ void wall_cb(const std_msgs::Float32MultiArray::ConstPtr& msg)
 void ReplanTimerCallback(const ros::TimerEvent&)
 {
   if (got_odom_ && wall_msg_updated_ && trajectory_wip_){
-    wall_msg_updated_ = false;
+    //wall_msg_updated_ = false;
 
 
     // if ((_curPos - _projectPt).length() > 0.8f) {
@@ -175,6 +181,9 @@ void TimerCallback(const ros::TimerEvent&)
   if (wall_msg_updated_){
     planeWorldABC_Est_ = (1-est_K_)*planeWorldABC_Est_ + est_K_*planeWorldABC_;
     planeWorldD_Est_ = (1-est_K_)*planeWorldD_Est_ + est_K_*planeWorldD_;
+    std::cout<<"planeWorldABC_ is "<<planeWorldABC_<<"\n";
+    std::cout<<"planeWorldABC_Est_ is "<<planeWorldABC_Est_<<"\n";
+
     wall_msg_updated_ = false;
   }
 
@@ -257,10 +266,10 @@ trajectory_msgs::MultiDOFJointTrajectory generateTraj(double timeinTraj, double 
       for (int i=0; i<3; i++){
         for (int k=0; k<2*dev_order_; k++){
           _pos(i) += polyCoeff_(nSeg_wip_, i*2*dev_order_+ k) * std::pow(_timeinTraj-_timeSum, k);
-          _vel(i) += (k>0? k*
-                      polyCoeff_(nSeg_wip_, i*2*dev_order_+ k) * std::pow(_timeinTraj-_timeSum, k-1):0);
-          _acc(i) += (k>1? k*(k-1)*
-                      polyCoeff_(nSeg_wip_, i*2*dev_order_+ k) * std::pow(_timeinTraj-_timeSum, k-2):0);
+          // _vel(i) += (k>0? k*
+          //             polyCoeff_(nSeg_wip_, i*2*dev_order_+ k) * std::pow(_timeinTraj-_timeSum, k-1):0);
+          // _acc(i) += (k>1? k*(k-1)*
+          //             polyCoeff_(nSeg_wip_, i*2*dev_order_+ k) * std::pow(_timeinTraj-_timeSum, k-2):0);
         }
       }
       for (int k=0; k<2*dev_order_; k++){
@@ -269,12 +278,18 @@ trajectory_msgs::MultiDOFJointTrajectory generateTraj(double timeinTraj, double 
       _yaw = wrapPi(_yaw);        
     }
 
+    Eigen::Vector3d _pos_reprojected;
+    _pos_reprojected = _pos + planeWorldABC_Est_ * (-planeWorldD_Est_ + desired_distance_s_ 
+                                                    -planeWorldABC_Est_.dot(_pos));
+    
+    std::cout<<"pos reprojected is "<<_pos_reprojected<<"\n";
+    std::cout<<"pos is "<<_pos<<"\n";
     trajectory_msgs::MultiDOFJointTrajectoryPoint trajpt_msg;
     geometry_msgs::Transform transform_msg;
     geometry_msgs::Twist accel_msg, vel_msg;
-    transform_msg.translation.x = _pos(0);
-    transform_msg.translation.y = _pos(1);
-    transform_msg.translation.z = _pos(2);
+    transform_msg.translation.x = _pos_reprojected(0);
+    transform_msg.translation.y = _pos_reprojected(1);
+    transform_msg.translation.z = _pos_reprojected(2);
     transform_msg.rotation.x = 0;
     transform_msg.rotation.y = 0;
     transform_msg.rotation.z = sinf(_yaw*0.5);

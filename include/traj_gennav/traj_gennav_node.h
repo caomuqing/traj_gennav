@@ -94,6 +94,7 @@ double planeBodyD_ = 0.0;
 Eigen::Vector3d planeWorldABC_Est_(0.0, 0.0, 0.0);
 double planeWorldD_Est_ = 0.0;
 double est_K_ = 0.7;
+double desired_distance_s_ = 5.0;
 
 ros::Time last_wall_msg_time_;
 bool wall_msg_updated_;
