@@ -200,7 +200,7 @@ void TimerCallback(const ros::TimerEvent&)
       idle_state_ = true;      
     }      
 
-    trajectory_msgs::MultiDOFJointTrajectory trajset_msg = generateTraj(timeElasped, 0.01, 20);  
+    trajectory_msgs::MultiDOFJointTrajectory trajset_msg = generateTraj(timeElasped, 0.1, 20);  
     trajectory_pub.publish(trajset_msg);
         
         // for testing
@@ -223,7 +223,7 @@ void TimerCallback(const ros::TimerEvent&)
     if (trajectory_start_time_!= ros::Time(0.001)){
       ROS_INFO_ONCE("Just hold position then...");
       double timeElasped = (ros::Time::now() - trajectory_start_time_).toSec();
-      trajectory_msgs::MultiDOFJointTrajectory trajset_msg = generateTraj(timeElasped, 0.01, 20);  
+      trajectory_msgs::MultiDOFJointTrajectory trajset_msg = generateTraj(timeElasped, 0.1, 20);  
       trajectory_pub.publish(trajset_msg);        
     }
   }
@@ -240,7 +240,7 @@ trajectory_msgs::MultiDOFJointTrajectory generateTraj(double timeinTraj, double 
 
   for (int n = 0; n<horizon; n++){
     double _timeinTraj = timeinTraj + n*T_s;
-
+    _pos.setZero();
     if (_timeinTraj > polyTime_.sum()){
       if (n==0) ROS_INFO("Finished publishing trajectory. Hold position instead.");
 
