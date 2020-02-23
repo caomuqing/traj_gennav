@@ -2,7 +2,7 @@
 <launch>
 
   <!-- Configuring control package-->
-  <node respawn="false" pkg="traj_gennav" type="traj_gennav_node" name="traj_gennav" output="screen">
+  <node respawn="false" pkg="traj_gennav" type="traj_gennav_node" name="traj_gennav" output="screen" launch-prefix="xterm -e gdb --args">
       <param name="frame_id" type="string" value="world" />
       <param name="desired_distance" type="double" value="2.0" />
       <rosparam file="$(find traj_gennav)/paths/path.yaml"/>

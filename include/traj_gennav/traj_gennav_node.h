@@ -21,6 +21,7 @@
 #include <std_msgs/Float32MultiArray.h>
 #include <rviz_visual_tools/rviz_visual_tools.h>
 #include "Plane.h"
+#include <nav_msgs/Path.h>
 
 using namespace rviz_visual_tools;
 rviz_visual_tools::RvizVisualToolsPtr visual_tools_;
@@ -30,7 +31,9 @@ ros::Publisher trajectory_sim_pub, trajectory_pub;
 fullstate_t cmd_, current_odom_;
 ros::ServiceServer read_service_;
 ros::ServiceServer execute_service_;
-
+ros::Publisher Wall_estimate_pub;
+ros::Publisher nominal_path_publisher;
+ros::Publisher odom_path_publisher;
 
 bool readFileCallback(std_srvs::Empty::Request& request, std_srvs::Empty::Response& response);
 bool executePathCallback(std_srvs::Empty::Request& request, std_srvs::Empty::Response& response);
@@ -87,17 +90,20 @@ double kDistanceFromBuilding = 5.0;
 
 geodetic_converter::GeodeticConverter geodetic_converter_;
 
-Eigen::Vector3d planeWorldABC_(0.0, 0.0, 0.0);
+Eigen::Vector3d planeWorldABC_(-1.0, 0.0, 0.0);
 double planeWorldD_ = 0.0;
 Eigen::Vector3d planeBodyABC_(0.0, 0.0, 0.0);
 double planeBodyD_ = 0.0;
-Eigen::Vector3d planeWorldABC_Est_(0.0, 0.0, 0.0);
+Eigen::Vector3d planeWorldABC_Est_(-1.0, 0.0, 0.0);
 double planeWorldD_Est_ = 0.0;
 double est_K_ = 0.7;
 double desired_distance_s_ = 5.0;
 
 ros::Time last_wall_msg_time_;
+ros::Time last_odom_pub_time_(0);
 bool wall_msg_updated_;
+
+nav_msgs::Path odom_path_visualizer_;
 
 void TimerCallback(const ros::TimerEvent&);
 void ReplanTimerCallback(const ros::TimerEvent&);
@@ -109,6 +115,9 @@ void geoVec3toEigenVec3 (geometry_msgs::Vector3 geoVector3, Eigen::Vector3d& eig
 void geoPt3toEigenVec3 (geometry_msgs::Point geoPt3, Eigen::Vector3f& eigenVec3);
 void geoPt3toEigenVec3 (geometry_msgs::Point geoPt3, Eigen::Vector3d& eigenVec3);
 Eigen::VectorXd timeAllocation(Eigen::MatrixXd Path);
-trajectory_msgs::MultiDOFJointTrajectory generateTraj(double timeinTraj, double T_s, int horizon);
+trajectory_msgs::MultiDOFJointTrajectory generateTrajOnline(double timeinTraj, double T_s, int horizon);
+trajectory_msgs::MultiDOFJointTrajectory generateTrajNominal(double timeinTraj, double T_s, int horizon);
+
+void sampleWholeTrajandVisualize();
 
 #endif  // TRAJ_GENNAV_NODE_H

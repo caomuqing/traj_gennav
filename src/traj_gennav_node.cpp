@@ -63,14 +63,17 @@ int main(int argc, char** argv){
 
   ros::Subscriber wall_sub = nh.subscribe<std_msgs::Float32MultiArray>("/Environment_seg/Wall_model_coefficient", 10, wall_cb);
 
-  ros::Timer timer = nh.createTimer(ros::Duration(1.0/100), TimerCallback);
-  ros::Timer replantimer = nh.createTimer(ros::Duration(1.0/0.333), ReplanTimerCallback);
+  ros::Timer timer = nh.createTimer(ros::Duration(1.0/25), TimerCallback);
+  ros::Timer replantimer = nh.createTimer(ros::Duration(1.0/5), ReplanTimerCallback);
 
   read_service_ = nh.advertiseService("readfile", readFileCallback);
 
   execute_service_ = nh.advertiseService("execute_path", executePathCallback);
 
   trajectory_sim_pub = nh.advertise<nav_msgs::Odometry>("/trajectory_sim", 50);
+  Wall_estimate_pub = nh.advertise<geometry_msgs::PoseStamped> ("/wall_estimate", 1);
+  nominal_path_publisher = nh.advertise<nav_msgs::Path> ("/nominal_path", 1);
+  odom_path_publisher = nh.advertise<nav_msgs::Path> ("/odom_path", 1);
 
   visual_tools_.reset(new rviz_visual_tools::RvizVisualTools("/world","/plane_world"));
   visual_tools_->loadMarkerPub();  // create publisher before waiting
@@ -103,6 +106,20 @@ void odom_cb(const nav_msgs::Odometry::ConstPtr& msg)
                                         msg->pose.pose.orientation.y, msg->pose.pose.orientation.z);
   get_dcm_from_q(current_odom_.R, current_Quat);
   ROS_INFO_ONCE("Got first odom message!");
+
+  if ((ros::Time::now()-last_odom_pub_time_).toSec()>0.15){
+    //publish odom path for visualization
+    geometry_msgs::PoseStamped this_pose_stamped;
+    this_pose_stamped.header.frame_id = frame_id_;
+    this_pose_stamped.pose = msg->pose.pose;
+    odom_path_visualizer_.header.stamp = ros::Time::now();
+    odom_path_visualizer_.header.frame_id = frame_id_;
+    odom_path_visualizer_.poses.push_back(this_pose_stamped);
+    odom_path_publisher.publish(odom_path_visualizer_); 
+    last_odom_pub_time_ = ros::Time::now();
+  }
+
+
 }
 
 void wall_cb(const std_msgs::Float32MultiArray::ConstPtr& msg)
@@ -181,11 +198,27 @@ void TimerCallback(const ros::TimerEvent&)
   if (wall_msg_updated_){
     planeWorldABC_Est_ = (1-est_K_)*planeWorldABC_Est_ + est_K_*planeWorldABC_;
     planeWorldD_Est_ = (1-est_K_)*planeWorldD_Est_ + est_K_*planeWorldD_;
-    std::cout<<"planeWorldABC_ is "<<planeWorldABC_<<"\n";
-    std::cout<<"planeWorldABC_Est_ is "<<planeWorldABC_Est_<<"\n";
-
+    // std::cout<<"planeWorldABC_ is "<<planeWorldABC_<<"\n";
+    // std::cout<<"planeWorldABC_Est_ is "<<planeWorldABC_Est_<<"\n";
+    
     wall_msg_updated_ = false;
   }
+
+  geometry_msgs::PoseStamped wall_estimate_model;
+  wall_estimate_model.header.stamp = ros::Time::now();
+  wall_estimate_model.pose.orientation.x = planeWorldABC_Est_(0);
+  wall_estimate_model.pose.orientation.y = planeWorldABC_Est_(1);
+  wall_estimate_model.pose.orientation.z = planeWorldABC_Est_(2);
+  wall_estimate_model.pose.orientation.w = planeWorldD_Est_;
+
+  //get a sample at the middle of trajectory
+  if (polyTime_.size()>0) {
+    trajectory_msgs::MultiDOFJointTrajectory sample_point = generateTrajOnline(polyTime_.sum()/2, 0.1, 1);
+    wall_estimate_model.pose.position.x = sample_point.points[0].transforms[0].translation.x;
+    wall_estimate_model.pose.position.y = sample_point.points[0].transforms[0].translation.y;
+    wall_estimate_model.pose.position.z = sample_point.points[0].transforms[0].translation.z;
+  }
+  Wall_estimate_pub.publish(wall_estimate_model);
 
   if (start_trajectory_){
     if (!trajectory_wip_){
@@ -200,7 +233,7 @@ void TimerCallback(const ros::TimerEvent&)
       idle_state_ = true;      
     }      
 
-    trajectory_msgs::MultiDOFJointTrajectory trajset_msg = generateTraj(timeElasped, 0.1, 20);  
+    trajectory_msgs::MultiDOFJointTrajectory trajset_msg = generateTrajOnline(timeElasped, 0.1, 20);  
     trajectory_pub.publish(trajset_msg);
         
         // for testing
@@ -223,13 +256,13 @@ void TimerCallback(const ros::TimerEvent&)
     if (trajectory_start_time_!= ros::Time(0.001)){
       ROS_INFO_ONCE("Just hold position then...");
       double timeElasped = (ros::Time::now() - trajectory_start_time_).toSec();
-      trajectory_msgs::MultiDOFJointTrajectory trajset_msg = generateTraj(timeElasped, 0.1, 20);  
+      trajectory_msgs::MultiDOFJointTrajectory trajset_msg = generateTrajOnline(timeElasped, 0.1, 20);  
       trajectory_pub.publish(trajset_msg);        
     }
   }
 }
 
-trajectory_msgs::MultiDOFJointTrajectory generateTraj(double timeinTraj, double T_s, int horizon)
+trajectory_msgs::MultiDOFJointTrajectory generateTrajOnline(double timeinTraj, double T_s, int horizon)
 {
   Eigen::Vector3d _pos, _vel, _acc;
   double _yaw = 0.0;
@@ -259,10 +292,10 @@ trajectory_msgs::MultiDOFJointTrajectory generateTraj(double timeinTraj, double 
           break;
         } else _timeSum += polyTime_[k];
       }
-      if (n==0) {
-        std::cout<<"now in "<<nSeg_wip_<<" number of segment, time elapsed is "<<_timeinTraj<<
-              "time in this segment is"<< _timeinTraj-_timeSum<<"\n";        
-      }
+      // if (n==0) {
+      //   std::cout<<"now in "<<nSeg_wip_<<" number of segment, time elapsed is "<<_timeinTraj<<
+      //         "time in this segment is"<< _timeinTraj-_timeSum<<"\n";        
+      // }
       for (int i=0; i<3; i++){
         for (int k=0; k<2*dev_order_; k++){
           _pos(i) += polyCoeff_(nSeg_wip_, i*2*dev_order_+ k) * std::pow(_timeinTraj-_timeSum, k);
@@ -282,8 +315,8 @@ trajectory_msgs::MultiDOFJointTrajectory generateTraj(double timeinTraj, double 
     _pos_reprojected = _pos + planeWorldABC_Est_ * (-planeWorldD_Est_ + desired_distance_s_ 
                                                     -planeWorldABC_Est_.dot(_pos));
     
-    std::cout<<"pos reprojected is "<<_pos_reprojected<<"\n";
-    std::cout<<"pos is "<<_pos<<"\n";
+    // std::cout<<"pos reprojected is "<<_pos_reprojected<<"\n";
+    // std::cout<<"pos is "<<_pos<<"\n";
     trajectory_msgs::MultiDOFJointTrajectoryPoint trajpt_msg;
     geometry_msgs::Transform transform_msg;
     geometry_msgs::Twist accel_msg, vel_msg;
@@ -305,6 +338,67 @@ trajectory_msgs::MultiDOFJointTrajectory generateTraj(double timeinTraj, double 
     trajpt_msg.accelerations.push_back(accel_msg);
     trajset_msg.points.push_back(trajpt_msg);
   }
+  trajset_msg.header.stamp = ros::Time::now();
+  return trajset_msg;
+}
+
+trajectory_msgs::MultiDOFJointTrajectory generateTrajNominal(double timeinTraj, double T_s, int horizon)
+{
+  Eigen::Vector3d _pos, _vel, _acc;
+  double _yaw = 0.0;
+  _pos.setZero();
+  _vel.setZero();
+  _acc.setZero();
+  trajectory_msgs::MultiDOFJointTrajectory trajset_msg;
+
+  for (int n = 0; n<horizon; n++){
+    double _timeinTraj = timeinTraj + n*T_s;
+    _pos.setZero();
+    if (_timeinTraj > polyTime_.sum()){
+      if (n==0) ROS_INFO("Finished publishing trajectory. Hold position instead.");
+
+      _pos = initial_waypoints_.back().pos; //set pos and yaw as the final waypoint
+      _yaw = initial_waypoints_.back().yaw;
+      _vel.setZero();
+      _acc.setZero();
+
+    } else {  //find which segment it is at and publish accordingly
+      int _nSeg = polyTime_.size();
+      int nSeg_wip_;
+      double _timeSum = 0.0;
+      for (int k=0; k<_nSeg; k++){
+        if (_timeinTraj < _timeSum +polyTime_[k]){
+          nSeg_wip_ = k;
+          break;
+        } else _timeSum += polyTime_[k];
+      }
+      for (int i=0; i<3; i++){
+        for (int k=0; k<2*dev_order_; k++){
+          _pos(i) += polyCoeff_(nSeg_wip_, i*2*dev_order_+ k) * std::pow(_timeinTraj-_timeSum, k);
+        }
+      }
+      for (int k=0; k<2*dev_order_; k++){
+        _yaw += polyCoeff_(nSeg_wip_, 3*2*dev_order_+ k) * std::pow(_timeinTraj-_timeSum, k);
+      }
+      _yaw = wrapPi(_yaw);        
+    }
+
+    trajectory_msgs::MultiDOFJointTrajectoryPoint trajpt_msg;
+    geometry_msgs::Transform transform_msg;
+    geometry_msgs::Twist accel_msg, vel_msg;
+    transform_msg.translation.x = _pos(0);
+    transform_msg.translation.y = _pos(1);
+    transform_msg.translation.z = _pos(2);
+    transform_msg.rotation.x = 0;
+    transform_msg.rotation.y = 0;
+    transform_msg.rotation.z = sinf(_yaw*0.5);
+    transform_msg.rotation.w = cosf(_yaw*0.5);
+    trajpt_msg.transforms.push_back(transform_msg);
+    trajpt_msg.velocities.push_back(vel_msg);
+    trajpt_msg.accelerations.push_back(accel_msg);
+    trajset_msg.points.push_back(trajpt_msg);
+  }
+  trajset_msg.header.stamp = ros::Time::now();
   return trajset_msg;
 }
 
@@ -406,14 +500,37 @@ bool readFileCallback(std_srvs::Empty::Request& request, std_srvs::Empty::Respon
   polyTime_  = timeAllocation(initial_path);
   polyCoeff_ = trajectoryGeneratorWaypoint.PolyQPGenerationClosedForm(dev_order_, initial_path, vel, acc, polyTime_);
 
-  std::cout<<"polyTime_ is "<<polyTime_<<"\n";
-  std::cout<<"polyCoeff_ is"<<polyCoeff_<<"\n";
+  // std::cout<<"polyTime_ is "<<polyTime_<<"\n";
+  // std::cout<<"polyCoeff_ is"<<polyCoeff_<<"\n";
   trajectory_obtained_ = true;
 
   current_leg_ = 0;
+  sampleWholeTrajandVisualize();
   return true;
 }
 
+void sampleWholeTrajandVisualize()
+{ 
+  double sample_T = 0.1;
+  double T_total = polyTime_.sum();
+  
+  nav_msgs::Path pathVisualizer;
+  pathVisualizer.header.stamp = ros::Time::now();
+  pathVisualizer.header.frame_id = frame_id_;
+  for (double t=0; t<T_total; t+=sample_T){
+    ros::Time t_temp(t);
+    trajectory_msgs::MultiDOFJointTrajectory _traj_temp = generateTrajNominal(t, 0.1, 1);;
+    geometry_msgs::PoseStamped this_pose_stamped;
+    this_pose_stamped.header.stamp = t_temp;
+    this_pose_stamped.header.frame_id = frame_id_;
+    this_pose_stamped.pose.position.x = _traj_temp.points[0].transforms[0].translation.x;
+    this_pose_stamped.pose.position.y = _traj_temp.points[0].transforms[0].translation.y;
+    this_pose_stamped.pose.position.z = _traj_temp.points[0].transforms[0].translation.z;
+    this_pose_stamped.pose.orientation = _traj_temp.points[0].transforms[0].rotation;
+    pathVisualizer.poses.push_back(this_pose_stamped);
+  }
+  nominal_path_publisher.publish(pathVisualizer);
+}
 bool executePathCallback(std_srvs::Empty::Request& request, std_srvs::Empty::Response& response)
 {
   // if (!got_odom_){
