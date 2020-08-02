@@ -2,10 +2,12 @@
 <launch>
 
   <!-- Configuring control package-->
-  <node respawn="false" pkg="traj_gennav" type="traj_gennav_node" name="traj_gennav" output="screen" launch-prefix="xterm -e gdb --args">
+  <node respawn="false" pkg="traj_gennav" type="traj_gennav_node" name="traj_gennav" output="screen">
       <param name="frame_id" type="string" value="world" />
       <param name="desired_distance" type="double" value="2.0" />
+      <param name="path_from_message" type="bool" value="true" />
+      <param name="sim_type" type="string" value="sim_st" />
       <rosparam file="$(find traj_gennav)/paths/path.yaml"/>
-      <remap from="/vins_estimator/odometry" to="/firefly/ground_truth/odometry" />      
+      <remap from="/vins_estimator/odometry" to="/NTU_internal/drone_feedback" />      
   </node>
 </launch>

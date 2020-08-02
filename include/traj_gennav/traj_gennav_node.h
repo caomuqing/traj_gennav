@@ -16,9 +16,10 @@
 #include "traj_gennav/ReadPathFromFile.h"
 #include <mav_msgs/conversions.h>
 #include <mav_msgs/default_topics.h>
-#include <geodetic_utils/geodetic_conv.hpp>
+//#include <geodetic_utils/geodetic_conv.hpp>
 #include <std_srvs/Empty.h>
 #include <std_msgs/Float32MultiArray.h>
+#include <std_msgs/Bool.h>
 #include <rviz_visual_tools/rviz_visual_tools.h>
 #include "Plane.h"
 #include <nav_msgs/Path.h>
@@ -55,6 +56,7 @@ std::string path_mode_;
 std::string heading_mode_;
 std::string mav_name_;
 std::string frame_id_;
+std::string sim_type_;
 // Addition of intermediate command poses.
 bool intermediate_poses_;
 // Maximum distance between poses [m].
@@ -85,10 +87,10 @@ ros::Time trajectory_start_time_(0.001);
 
 size_t current_leg_;
 
-const double kIntermediatePoseTolerance = 0.5;
+const double kIntermediatePoseTolerance = 10;
 double kDistanceFromBuilding = 5.0;
 
-geodetic_converter::GeodeticConverter geodetic_converter_;
+//geodetic_converter::GeodeticConverter geodetic_converter_;
 
 Eigen::Vector3d planeWorldABC_(-1.0, 0.0, 0.0);
 double planeWorldD_ = 0.0;
@@ -98,10 +100,12 @@ Eigen::Vector3d planeWorldABC_Est_(-1.0, 0.0, 0.0);
 double planeWorldD_Est_ = 0.0;
 double est_K_ = 0.7;
 double desired_distance_s_ = 5.0;
+bool path_from_message_=false;
 
 ros::Time last_wall_msg_time_;
 ros::Time last_odom_pub_time_(0);
 bool wall_msg_updated_;
+bool start_command_prev_;
 
 nav_msgs::Path odom_path_visualizer_;
 
@@ -110,6 +114,9 @@ void ReplanTimerCallback(const ros::TimerEvent&);
 // void trajectory_cb(const trajectory_msgs::MultiDOFJointTrajectory::ConstPtr& msg);
 void odom_cb(const nav_msgs::Odometry::ConstPtr& msg);
 void wall_cb(const std_msgs::Float32MultiArray::ConstPtr& msg);
+void path_input_cb(const nav_msgs::Path::ConstPtr& msg);
+void start_path_command_cb(const std_msgs::Bool::ConstPtr& msg);
+
 void geoVec3toEigenVec3 (geometry_msgs::Vector3 geoVector3, Eigen::Vector3f& eigenVec3);
 void geoVec3toEigenVec3 (geometry_msgs::Vector3 geoVector3, Eigen::Vector3d& eigenVec3);
 void geoPt3toEigenVec3 (geometry_msgs::Point geoPt3, Eigen::Vector3f& eigenVec3);

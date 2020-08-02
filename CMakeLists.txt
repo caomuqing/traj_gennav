@@ -28,7 +28,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   mav_msgs
   message_generation
-  geodetic_utils
+  ## geodetic_utils
   rviz_visual_tools
 )
 

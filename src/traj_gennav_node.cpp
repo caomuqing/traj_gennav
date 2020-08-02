@@ -22,6 +22,7 @@ int main(int argc, char** argv){
 
   nh.param("derivative_order", dev_order_, 3);
   nh.param("desired_distance", desired_distance_s_, 5.0);
+  nh.param("path_from_message", path_from_message_, false);
 
   if (coordinate_type_ == "gps" || coordinate_type_ == "enu") {
   } else {
@@ -52,6 +53,16 @@ int main(int argc, char** argv){
     ROS_WARN("Error: path parameter arrays are not the same size");
   }
 
+  if (!nh.getParam("sim_type", sim_type_)){
+    ROS_WARN("Don't have sim type parameter. Exiting");
+    exit(-1);
+  }
+
+  if(sim_type_!="rotors" && sim_type_!="dji" && sim_type_!="none" && sim_type_!="none_st" && sim_type_!="sim_st"){
+    ROS_WARN("not good, don't know in simulation or real flight");
+    exit(-1);
+  }
+
   // rpyt_command_pub = nh.advertise<mav_msgs::RollPitchYawrateThrust>(
   //                                   "/firefly/command/roll_pitch_yawrate_thrust1", 50);
   trajectory_pub = nh.advertise<trajectory_msgs::MultiDOFJointTrajectory>(
@@ -62,6 +73,10 @@ int main(int argc, char** argv){
   ros::Subscriber odom_sub = nh.subscribe<nav_msgs::Odometry>("/vins_estimator/odometry", 10, odom_cb);
 
   ros::Subscriber wall_sub = nh.subscribe<std_msgs::Float32MultiArray>("/Environment_seg/Wall_model_coefficient", 10, wall_cb);
+
+  ros::Subscriber path_input_sub = nh.subscribe<nav_msgs::Path>("/NTU_internal/path_in_local_ref", 10, path_input_cb);
+
+  ros::Subscriber start_path_command_sub = nh.subscribe<std_msgs::Bool>("/st_sdk/start_following_path", 10, start_path_command_cb);
 
   ros::Timer timer = nh.createTimer(ros::Duration(1.0/25), TimerCallback);
   ros::Timer replantimer = nh.createTimer(ros::Duration(1.0/5), ReplanTimerCallback);
@@ -91,9 +106,9 @@ void odom_cb(const nav_msgs::Odometry::ConstPtr& msg)
   current_odom_.timestamp = ros::Time::now();
   geoPt3toEigenVec3(msg->pose.pose.position, current_odom_.pos);
 
-  if (false){
+  if (sim_type_!="rotors"){ // when velocity from odom is in ENU frame
     geoVec3toEigenVec3(msg->twist.twist.linear, current_odom_.vel);
-  } else {
+  } else { // when velocity from odom is in body frame
     Eigen::Quaterniond orientation_W_B(msg->pose.pose.orientation.w, msg->pose.pose.orientation.x, 
                                        msg->pose.pose.orientation.y, msg->pose.pose.orientation.z);
     Eigen::Vector3d velocity_body(msg->twist.twist.linear.x, msg->twist.twist.linear.y, msg->twist.twist.linear.z);
@@ -106,6 +121,24 @@ void odom_cb(const nav_msgs::Odometry::ConstPtr& msg)
                                         msg->pose.pose.orientation.y, msg->pose.pose.orientation.z);
   get_dcm_from_q(current_odom_.R, current_Quat);
   ROS_INFO_ONCE("Got first odom message!");
+
+  // if (true){ //st sim testing
+  //   tf::Quaternion q0(msg->pose.pose.orientation.x, msg->pose.pose.orientation.y, 
+  //                     msg->pose.pose.orientation.z, msg->pose.pose.orientation.w);
+  //   tf::Quaternion q1 = tf::createQuaternionFromRPY(3.1415927, 0, -3.1415927/2); 
+  //   tf::Quaternion qf = q1*q0;
+  //   Eigen::Quaternion<double> current_Quat1(qf.w(), qf.x(), qf.y(), qf.z());
+  //   get_dcm_from_q(current_odom_.R, current_Quat1);   
+  // }
+  if (sim_type_=="none_st"||sim_type_=="sim_st"){
+    Eigen::Vector3d _rpy;
+    get_euler_from_R(_rpy, current_odom_.R);
+    tf::Quaternion qf = tf::createQuaternionFromRPY(_rpy(0), -_rpy(1), -wrapPi(_rpy(2)-3.1415927/2)); 
+    Eigen::Quaternion<double> current_Quat1(qf.w(), qf.x(), qf.y(), qf.z());
+    get_dcm_from_q(current_odom_.R, current_Quat1);
+    get_euler_from_R(_rpy, current_odom_.R);
+    //std::cout<< " CURRENT ENU roll"<< _rpy(0)/3.1415*180<<"  pitch"<<_rpy(1)/3.1415*180<<"  yaw"<<_rpy(2)/3.1415*180<<"\n";
+  }
 
   if ((ros::Time::now()-last_odom_pub_time_).toSec()>0.15){
     //publish odom path for visualization
@@ -150,9 +183,9 @@ void wall_cb(const std_msgs::Float32MultiArray::ConstPtr& msg)
   }                        
 
   //double planeWorldD = planeBodyD_ - planeBodyABC_.dot(current_odom_.pos);
-  visual_tools_->deleteAllMarkers();
-  visual_tools_->publishABCDPlane(planeWorldABC_(0), planeWorldABC_(1), planeWorldABC_(2), 
-                                  planeWorldD_, rviz_visual_tools::BLUE, 5.0, 5.0);
+  // visual_tools_->deleteAllMarkers();
+  // visual_tools_->publishABCDPlane(planeWorldABC_(0), planeWorldABC_(1), planeWorldABC_(2), 
+  //                                 planeWorldD_, rviz_visual_tools::BLUE, 5.0, 5.0);
 
   // Plane _facadePlane(planeWorldABC(0), planeWorldABC(1), planeWorldABC(2), planeWorldD);
   // Vec3f _curPos(current_odom_.pos(0), current_odom_.pos(1), current_odom_.pos(2));
@@ -162,7 +195,111 @@ void wall_cb(const std_msgs::Float32MultiArray::ConstPtr& msg)
   // float _replanSurfaceD = -Vec3f::Dot(_facadeNormalXY, _projectPt);
   // visual_tools_->publishABCDPlane(_facadeNormalXY.x, _facadeNormalXY.y, _facadeNormalXY.z, 
   //                                 _replanSurfaceD, rviz_visual_tools::RED, 5.0, 5.0);
-  visual_tools_->trigger();  //publish plane for testing purpose only
+  //visual_tools_->trigger();  //publish plane for testing purpose only
+}
+
+void start_path_command_cb(const std_msgs::Bool::ConstPtr& msg)
+{ 
+  if (msg->data!=start_command_prev_){
+    if (msg->data==true && trajectory_obtained_){ //command to start and got traj already
+      start_trajectory_ = true;
+      idle_state_ = false;
+      ROS_INFO("STARTING TRAJECTORY PUBLISH!");
+    } else if (msg->data==false){ //command change to stop traj
+      start_trajectory_ = false;
+      idle_state_ = true;      
+    }
+  }
+  start_command_prev_ = msg->data;
+}
+
+void path_input_cb(const nav_msgs::Path::ConstPtr& msg) //for st
+{
+  if (!path_from_message_){
+    ROS_WARN("DID NOT ALLOW PATH FROM MESSAGE!");
+    return;
+  }
+  if (!got_odom_){
+    ROS_WARN("NO ODOM, WILL NOT CALCULATE TRAJECTORY");
+    return;
+  }
+  start_trajectory_ = false;
+  idle_state_ = true;
+  trajectory_wip_ = false;
+  initial_waypoints_.clear();
+  addCurrentOdometryWaypoint();
+
+  // Add (x,y,z) co-ordinates from file to path.
+  for (size_t i = 0; i < msg->poses.size(); i++) {
+    flatstate_t cwp;
+    
+    // ENU path co-ordinates.
+    // coordinate_type_ == "enu"
+      cwp.pos(0) = msg->poses[i].pose.position.x;
+      cwp.pos(1) = msg->poses[i].pose.position.y;
+      cwp.pos(2) = msg->poses[i].pose.position.z;
+    
+    initial_waypoints_.push_back(cwp);
+  }
+
+  // Add heading from file to path.
+  for (size_t i = 1; i < initial_waypoints_.size(); i++) {
+    // heading_mode_ == "zero") {
+      initial_waypoints_[i].yaw = initial_waypoints_[0].yaw;
+    
+  }
+
+  // As first target point, add current (x,y) position, but with height at
+  // that of the first requested waypoint, so that the MAV first adjusts height
+  // moving only vertically.
+  if (initial_waypoints_.size() >= 2) {
+    flatstate_t vwp;
+    vwp.pos = current_odom_.pos;
+    vwp.pos(2) = initial_waypoints_[1].pos(2);
+    vwp.yaw = initial_waypoints_[0].yaw;     // Do not change heading.
+    if ((vwp.pos-initial_waypoints_[1].pos).norm() > kIntermediatePoseTolerance)
+      initial_waypoints_.insert(initial_waypoints_.begin() + 1, vwp);
+  }
+
+  // Limit maximum distance between waypoints.
+  if (intermediate_poses_) {
+    addIntermediateWaypoints();
+  }
+
+  int num_wp = (int)initial_waypoints_.size();
+  ROS_INFO("Path loaded from file. Number of points in path: %d", num_wp);
+
+  //conversion to matrix form for later optimisation purpose
+  Eigen::MatrixXd initial_path(num_wp,4);  
+  initial_path(0, 3) = initial_waypoints_[0].yaw;
+  for (int i=0; i<num_wp; i++){
+    initial_path(i, 0) = initial_waypoints_[i].pos(0);
+    initial_path(i, 1) = initial_waypoints_[i].pos(1);
+    initial_path(i, 2) = initial_waypoints_[i].pos(2);
+
+    if (i+1<num_wp)
+      initial_path(i+1, 3) = initial_path(i, 3) + 
+                            wrapPi(initial_waypoints_[i+1].yaw - initial_path(i, 3));
+  }
+
+  std::cout<<"initial_path is "<<initial_path<<"\n";
+  TrajectoryGeneratorWaypoint  trajectoryGeneratorWaypoint;
+  
+  Eigen::MatrixXd vel = Eigen::MatrixXd::Zero(2, 4);  //start and end velocity as zero
+  Eigen::MatrixXd acc = Eigen::MatrixXd::Zero(2, 4);  //start and end acceleration as zero
+
+  // give an arbitraty time allocation, all set all durations as 1 in the commented function.
+  ROS_INFO("Start solving for trajectory...");
+  polyTime_  = timeAllocation(initial_path);
+  polyCoeff_ = trajectoryGeneratorWaypoint.PolyQPGenerationClosedForm(dev_order_, initial_path, vel, acc, polyTime_);
+
+  // std::cout<<"polyTime_ is "<<polyTime_<<"\n";
+  // std::cout<<"polyCoeff_ is"<<polyCoeff_<<"\n";
+  trajectory_obtained_ = true;
+
+  current_leg_ = 0;
+  sampleWholeTrajandVisualize();
+  return;  
 }
 
 // void geoQuatoEigenQua (geometry_msgs::Quaternion geoQua, Eigen::Quaternion& eigenQua)
@@ -312,11 +449,18 @@ trajectory_msgs::MultiDOFJointTrajectory generateTrajOnline(double timeinTraj, d
     }
 
     Eigen::Vector3d _pos_reprojected;
-    _pos_reprojected = _pos + planeWorldABC_Est_ * (-planeWorldD_Est_ + desired_distance_s_ 
-                                                    -planeWorldABC_Est_.dot(_pos));
+    _pos_reprojected = _pos; //+ planeWorldABC_Est_ * (-planeWorldD_Est_ + desired_distance_s_ 
+                             //                       -planeWorldABC_Est_.dot(_pos));
     
-    // std::cout<<"pos reprojected is "<<_pos_reprojected<<"\n";
-    // std::cout<<"pos is "<<_pos<<"\n";
+    if (sim_type_=="none_st"||sim_type_=="sim_st"){
+      _pos_reprojected = _pos;
+    } else {
+      _pos_reprojected = _pos + planeWorldABC_Est_ * (-planeWorldD_Est_ + desired_distance_s_ 
+                                                      -planeWorldABC_Est_.dot(_pos));      
+    }
+
+     std::cout<<"pos reprojected is "<<_pos_reprojected<<"\n";
+     std::cout<<"pos is "<<_pos<<"\n";
     trajectory_msgs::MultiDOFJointTrajectoryPoint trajpt_msg;
     geometry_msgs::Transform transform_msg;
     geometry_msgs::Twist accel_msg, vel_msg;
@@ -419,16 +563,16 @@ bool readFileCallback(std_srvs::Empty::Request& request, std_srvs::Empty::Respon
     flatstate_t cwp;
     // GPS path co-ordinates.
     if (coordinate_type_ == "gps") {
-      double initial_latitude;
-      double initial_longitude;
-      double initial_altitude;
+      // double initial_latitude;
+      // double initial_longitude;
+      // double initial_altitude;
 
       // Convert GPS point to ENU co-ordinates.
       // NB: waypoint altitude = desired height above reference + registered
       // reference altitude.
-      geodetic_converter_.getReference(&initial_latitude, &initial_longitude, &initial_altitude);
-      geodetic_converter_.geodetic2Enu(northing[i], easting[i], (initial_altitude + height[i]),
-                                       &cwp.pos(0), &cwp.pos(1), &cwp.pos(2));
+      // geodetic_converter_.getReference(&initial_latitude, &initial_longitude, &initial_altitude);
+      // geodetic_converter_.geodetic2Enu(northing[i], easting[i], (initial_altitude + height[i]),
+      //                                 &cwp.pos(0), &cwp.pos(1), &cwp.pos(2));
     }
     // ENU path co-ordinates.
     else if (coordinate_type_ == "enu") {
