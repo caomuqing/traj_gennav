@@ -449,14 +449,14 @@ trajectory_msgs::MultiDOFJointTrajectory generateTrajOnline(double timeinTraj, d
     }
 
     Eigen::Vector3d _pos_reprojected;
-    _pos_reprojected = _pos; //+ planeWorldABC_Est_ * (-planeWorldD_Est_ + desired_distance_s_ 
-                             //                       -planeWorldABC_Est_.dot(_pos));
+    // _pos_reprojected = _pos+ planeWorldABC_Est_ * (-planeWorldD_Est_ + desired_distance_s_ 
+    //                                               -planeWorldABC_Est_.dot(_pos));
     
     if (sim_type_=="none_st"||sim_type_=="sim_st"){
       _pos_reprojected = _pos;
     } else {
-      _pos_reprojected = _pos + planeWorldABC_Est_ * (-planeWorldD_Est_ + desired_distance_s_ 
-                                                      -planeWorldABC_Est_.dot(_pos));      
+      _pos_reprojected = _pos+ planeWorldABC_Est_ * (-planeWorldD_Est_ + desired_distance_s_ 
+                                                    -planeWorldABC_Est_.dot(_pos));  
     }
 
      std::cout<<"pos reprojected is "<<_pos_reprojected<<"\n";

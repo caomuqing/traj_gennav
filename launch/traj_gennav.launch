@@ -6,8 +6,9 @@
       <param name="frame_id" type="string" value="world" />
       <param name="desired_distance" type="double" value="2.0" />
       <param name="path_from_message" type="bool" value="true" />
-      <param name="sim_type" type="string" value="sim_st" />
+      <param name="sim_type" type="string" value="rotors" />
       <rosparam file="$(find traj_gennav)/paths/path.yaml"/>
-      <remap from="/vins_estimator/odometry" to="/NTU_internal/drone_feedback" />      
+<!--       <remap from="/vins_estimator/odometry" to="/NTU_internal/drone_feedback" />      
+ -->      <remap from="/vins_estimator/odometry" to="/firefly/ground_truth/odometry" />      
   </node>
 </launch>

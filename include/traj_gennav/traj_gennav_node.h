@@ -87,7 +87,7 @@ ros::Time trajectory_start_time_(0.001);
 
 size_t current_leg_;
 
-const double kIntermediatePoseTolerance = 10;
+const double kIntermediatePoseTolerance = 1.0;
 double kDistanceFromBuilding = 5.0;
 
 //geodetic_converter::GeodeticConverter geodetic_converter_;
