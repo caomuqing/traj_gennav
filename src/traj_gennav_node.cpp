@@ -243,10 +243,34 @@ void path_input_cb(const nav_msgs::Path::ConstPtr& msg) //for st
   }
 
   // Add heading from file to path.
-  for (size_t i = 1; i < initial_waypoints_.size(); i++) {
-    // heading_mode_ == "zero") {
-      initial_waypoints_[i].yaw = initial_waypoints_[0].yaw;
+  // for (size_t i = 1; i < initial_waypoints_.size(); i++) {
+  //   // heading_mode_ == "zero") {
+  //     initial_waypoints_[i].yaw = initial_waypoints_[0].yaw;
     
+  // }
+  for (size_t i = 1; i < initial_waypoints_.size(); i++) {
+    if (heading_mode_ == "manual") {
+      tf::Quaternion _tmp(msg->poses[i-1].pose.orientation.x,
+        msg->poses[i-1].pose.orientation.y,
+        msg->poses[i-1].pose.orientation.z,
+        msg->poses[i-1].pose.orientation.w);
+            tf::Matrix3x3 mm(_tmp);
+      double _roll, _pitch, _yaw;            
+      mm.getRPY(_roll, _pitch, _yaw);
+      initial_waypoints_[i].yaw=_yaw;
+
+    } else if (heading_mode_ == "auto") {
+      // Compute heading in direction towards next point.
+      initial_waypoints_[i].yaw=
+          atan2(initial_waypoints_[i].pos(1) -
+                    initial_waypoints_[i - 1].pos(1),
+                initial_waypoints_[i].pos(0) -
+                    initial_waypoints_[i - 1].pos(0));
+    } else if (heading_mode_ == "zero") {
+      initial_waypoints_[i].yaw=0.0;
+    } else {
+      initial_waypoints_[i].yaw = initial_waypoints_[0].yaw;
+    }
   }
 
   // As first target point, add current (x,y) position, but with height at
@@ -299,6 +323,15 @@ void path_input_cb(const nav_msgs::Path::ConstPtr& msg) //for st
 
   current_leg_ = 0;
   sampleWholeTrajandVisualize();
+
+  if (sim_type_=="dji"){
+    if (trajectory_obtained_){
+      start_trajectory_ = true;
+      idle_state_ = false;
+      ROS_INFO("Start trajectory publish!!");
+    } else ROS_INFO("Something went wrong!!");
+  }
+
   return;  
 }
 
@@ -451,10 +484,14 @@ trajectory_msgs::MultiDOFJointTrajectory generateTrajOnline(double timeinTraj, d
     Eigen::Vector3d _pos_reprojected;
     // _pos_reprojected = _pos+ planeWorldABC_Est_ * (-planeWorldD_Est_ + desired_distance_s_ 
     //                                               -planeWorldABC_Est_.dot(_pos));
-    
+    Eigen::Vector3d tmp_vec(-1.0, 0.0, 0.0);
+
     if (sim_type_=="none_st"||sim_type_=="sim_st"){
       _pos_reprojected = _pos;
-    } else {
+    } else if ((planeWorldABC_Est_-tmp_vec).norm()<=0.0001){ //no update in wall coefficients at all
+            _pos_reprojected = _pos;
+
+    } else{
       _pos_reprojected = _pos+ planeWorldABC_Est_ * (-planeWorldD_Est_ + desired_distance_s_ 
                                                     -planeWorldABC_Est_.dot(_pos));  
     }
@@ -655,7 +692,7 @@ bool readFileCallback(std_srvs::Empty::Request& request, std_srvs::Empty::Respon
 
 void sampleWholeTrajandVisualize()
 { 
-  double sample_T = 0.1;
+  double sample_T = 0.5;
   double T_total = polyTime_.sum();
   
   nav_msgs::Path pathVisualizer;
