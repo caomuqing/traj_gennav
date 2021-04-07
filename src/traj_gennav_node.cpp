@@ -173,7 +173,7 @@ void wall_cb(const std_msgs::Float32MultiArray::ConstPtr& msg)
   _R_lidar_body(2,2) = -1;
   Eigen::Vector3d x_0_body(0, 0, -planeBodyD_/planeBodyABC_(2));
   Eigen::Vector3d x_0_world = (current_odom_.R) * 
-                              (_R_lidar_body * x_0_body + current_odom_.pos);
+                              (_R_lidar_body * x_0_body) + current_odom_.pos;
   planeWorldABC_ = (current_odom_.R * _R_lidar_body) * planeBodyABC_ ;
   planeWorldABC_ = planeWorldABC_/planeWorldABC_.norm(); //normalization
   planeWorldD_ = -planeWorldABC_.dot(x_0_world);     
@@ -185,7 +185,7 @@ void wall_cb(const std_msgs::Float32MultiArray::ConstPtr& msg)
   //double planeWorldD = planeBodyD_ - planeBodyABC_.dot(current_odom_.pos);
   // visual_tools_->deleteAllMarkers();
   // visual_tools_->publishABCDPlane(planeWorldABC_(0), planeWorldABC_(1), planeWorldABC_(2), 
-  //                                 planeWorldD_, rviz_visual_tools::BLUE, 5.0, 5.0);
+  //                                 planeWorldD_, rviz_visual_tools::BLUE, 50.0, 50.0);
 
   // Plane _facadePlane(planeWorldABC(0), planeWorldABC(1), planeWorldABC(2), planeWorldD);
   // Vec3f _curPos(current_odom_.pos(0), current_odom_.pos(1), current_odom_.pos(2));
@@ -195,7 +195,7 @@ void wall_cb(const std_msgs::Float32MultiArray::ConstPtr& msg)
   // float _replanSurfaceD = -Vec3f::Dot(_facadeNormalXY, _projectPt);
   // visual_tools_->publishABCDPlane(_facadeNormalXY.x, _facadeNormalXY.y, _facadeNormalXY.z, 
   //                                 _replanSurfaceD, rviz_visual_tools::RED, 5.0, 5.0);
-  //visual_tools_->trigger();  //publish plane for testing purpose only
+  // visual_tools_->trigger();  //publish plane for testing purpose only
 }
 
 void start_path_command_cb(const std_msgs::Bool::ConstPtr& msg)
