@@ -8,7 +8,7 @@ reference_acceleration: 0.4
 takeoff_height: 1.0
 landing_height: 0.0
 heading_mode: 'manual'
-easting: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-northing: [-1.5, 1.5, 1.5, -1.5, -1.5, 1.5]
-height: [0.6, 0.6, 1.0, 1.0, 1.5, 1.5]
+easting: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+northing: [-1.5, 1.5, 1.5, -1.5, -1.5, 1.5, 1.5]
+height: [0.6, 0.6, 1.0, 1.0, 1.5, 1.5, -0.2]
 heading: [0, 0, 0, 0, 0, 0]
