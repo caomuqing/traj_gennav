@@ -496,8 +496,8 @@ trajectory_msgs::MultiDOFJointTrajectory generateTrajOnline(double timeinTraj, d
                                                     -planeWorldABC_Est_.dot(_pos));  
     }
 
-     std::cout<<"pos reprojected is "<<_pos_reprojected<<"\n";
-     std::cout<<"pos is "<<_pos<<"\n";
+     // std::cout<<"pos reprojected is "<<_pos_reprojected<<"\n";
+     // std::cout<<"pos is "<<_pos<<"\n";
     trajectory_msgs::MultiDOFJointTrajectoryPoint trajpt_msg;
     geometry_msgs::Transform transform_msg;
     geometry_msgs::Twist accel_msg, vel_msg;
