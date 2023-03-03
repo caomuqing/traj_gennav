@@ -1,0 +1,151 @@
+<launch>
+  <arg name="world_name" default="basic"/>
+  <arg name="enable_logging" default="false"/>
+  <arg name="enable_ground_truth" default="true"/>
+  <arg name="paused" value="false"/>
+
+  <env name="GAZEBO_MODEL_PATH" value="${GAZEBO_MODEL_PATH}:$(find rotors_gazebo)/models"/>
+  <env name="GAZEBO_RESOURCE_PATH" value="${GAZEBO_RESOURCE_PATH}:$(find rotors_gazebo)/models"/>
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="world_name" value="$(find rotors_gazebo)/worlds/$(arg world_name).world"/>
+    <!-- <arg name="debug" value="true"/> -->
+    <arg name="paused" value="$(arg paused)"/>
+    <!-- <arg name="gui" value="false"/> -->
+  </include>
+
+  <group ns="hummingbird1">
+    <arg name="mav_name" value="hummingbird1" />
+    <include file="$(find rotors_gazebo)/launch/spawn_mav.launch">
+      <arg name="mav_name" value="hummingbird1" />
+      <arg name="model" value="$(find rotors_description)/urdf/mav_generic_odometry_sensor.gazebo" />
+      <arg name="enable_logging" value="$(arg enable_logging)" />
+      <arg name="enable_ground_truth" value="$(arg enable_ground_truth)" />
+      <arg name="log_file" value="hummingbird1"/>
+      <arg name="y" value="2.0"/>
+      <arg name="x" value="-2.0"/>
+    </include>
+
+    <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
+    <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" />
+
+   <!-- Low Level Controller-->
+    <node name="PID_attitude_controller" pkg="mav_lowlevel_attitude_controller" type="mav_pid_attitude_controller_node" respawn="true" clear_params="true" output="screen">
+      <remap from="odometry" to="ground_truth/odometry" />
+      <rosparam file="$(find mav_lowlevel_attitude_controller)/resources/PID_attitude_hummingbird.yaml" />
+    </node>   
+
+  <!-- Navigator-->
+  <node respawn="false" pkg="traj_gennav" type="traj_gennav_node" name="traj_gennav" output="screen">
+      <param name="frame_id" type="string" value="world" />
+      <param name="desired_distance" type="double" value="2.0" />
+      <param name="path_from_message" type="bool" value="true" />
+      <param name="sim_type" type="string" value="rotors" />
+      <rosparam file="$(find traj_gennav)/paths/path_flightmare.yaml"/>
+      <remap from="/vins_estimator/odometry" to="/$(arg mav_name)/ground_truth/odometry" />  
+       <remap from="/firefly/command/trajectory" to="/$(arg mav_name)/command/trajectory" />  
+    
+  </node>
+
+  <!-- Controller-->
+  <node respawn="false" pkg="tcc" type="tcc" name="tcc" output="screen">
+      <param name="frame_id" type="string" value="world" />
+      <param name="sim_type" type="string" value="rotors" />
+      <param name="mpc_sim" type="bool" value="false" />
+      <remap from="/vins_estimator/odometry" to="/$(arg mav_name)/ground_truth/odometry" />   
+      <remap from="/firefly/command/trajectory" to="/$(arg mav_name)/command/trajectory" />  
+      <remap from="/firefly/command/roll_pitch_yawrate_thrust" to="/$(arg mav_name)/command/roll_pitch_yawrate_thrust" />  
+  </node> 
+
+  </group>
+
+
+  <group ns="hummingbird2">
+    <arg name="mav_name" value="hummingbird2" />
+<!--     <include file="$(find rotors_gazebo)/launch/spawn_mav.launch">
+      <arg name="mav_name" value="hummingbird2" />
+      <arg name="model" value="$(find rotors_description)/urdf/mav_generic_odometry_sensor.gazebo" />
+      <arg name="enable_logging" value="$(arg enable_logging)" />
+      <arg name="enable_ground_truth" value="$(arg enable_ground_truth)" />
+      <arg name="log_file" value="hummingbird2"/>
+      <arg name="y" value="0.24"/>
+      <arg name="x" value="-2.0"/>
+    </include> -->
+
+<!--     <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
+    <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" /> -->
+
+  <!-- Low Level Controller-->
+<!--     <node name="PID_attitude_controller" pkg="mav_lowlevel_attitude_controller" type="mav_pid_attitude_controller_node" respawn="true" clear_params="true" output="screen">
+      <remap from="odometry" to="ground_truth/odometry" />
+      <rosparam file="$(find mav_lowlevel_attitude_controller)/resources/PID_attitude_hummingbird.yaml" />
+    </node>  -->   
+
+  <!-- Navigator-->
+<!--   <node respawn="false" pkg="traj_gennav" type="traj_gennav_node" name="traj_gennav" output="screen">
+      <param name="frame_id" type="string" value="world" />
+      <param name="desired_distance" type="double" value="2.0" />
+      <param name="path_from_message" type="bool" value="true" />
+      <param name="sim_type" type="string" value="rotors" />
+      <rosparam file="$(find traj_gennav)/paths/path_flightmare.yaml"/>
+      <remap from="/vins_estimator/odometry" to="/$(arg mav_name)/ground_truth/odometry" />  
+       <remap from="/firefly/command/trajectory" to="/$(arg mav_name)/command/trajectory" />  
+    
+  </node> -->
+
+  <!-- Controller-->
+<!--   <node respawn="false" pkg="tcc" type="tcc" name="tcc" output="screen">
+      <param name="frame_id" type="string" value="world" />
+      <param name="sim_type" type="string" value="rotors" />
+      <param name="mpc_sim" type="bool" value="false" />
+      <remap from="/vins_estimator/odometry" to="/$(arg mav_name)/ground_truth/odometry" />   
+      <remap from="/firefly/command/trajectory" to="/$(arg mav_name)/command/trajectory" />  
+      <remap from="/firefly/command/roll_pitch_yawrate_thrust" to="/$(arg mav_name)/command/roll_pitch_yawrate_thrust" />  
+  </node>      -->
+  </group>
+
+    <group ns="hummingbird3">
+      <arg name="mav_name" value="hummingbird3" />
+<!--     <include file="$(find rotors_gazebo)/launch/spawn_mav.launch">
+      <arg name="mav_name" value="hummingbird3" />
+      <arg name="model" value="$(find rotors_description)/urdf/mav_generic_odometry_sensor.gazebo" />
+      <arg name="enable_logging" value="$(arg enable_logging)" />
+      <arg name="enable_ground_truth" value="$(arg enable_ground_truth)" />
+      <arg name="log_file" value="hummingbird3"/>
+      <arg name="y" value="-0.92"/>
+      <arg name="x" value="-2.0"/>
+    </include> -->
+
+<!--     <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
+    <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" /> -->
+
+  <!-- Low Level Controller-->
+<!--     <node name="PID_attitude_controller" pkg="mav_lowlevel_attitude_controller" type="mav_pid_attitude_controller_node" respawn="true" clear_params="true" output="screen">
+      <remap from="odometry" to="ground_truth/odometry" />
+      <rosparam file="$(find mav_lowlevel_attitude_controller)/resources/PID_attitude_hummingbird.yaml" />
+    </node>    -->
+
+  <!-- Navigator-->
+<!--   <node respawn="false" pkg="traj_gennav" type="traj_gennav_node" name="traj_gennav" output="screen">
+      <param name="frame_id" type="string" value="world" />
+      <param name="desired_distance" type="double" value="2.0" />
+      <param name="path_from_message" type="bool" value="true" />
+      <param name="sim_type" type="string" value="rotors" />
+      <rosparam file="$(find traj_gennav)/paths/path_flightmare.yaml"/>
+      <remap from="/vins_estimator/odometry" to="/$(arg mav_name)/ground_truth/odometry" />  
+       <remap from="/firefly/command/trajectory" to="/$(arg mav_name)/command/trajectory" />  
+    
+  </node> -->
+
+  <!-- Controller-->
+<!--   <node respawn="false" pkg="tcc" type="tcc" name="tcc" output="screen">
+      <param name="frame_id" type="string" value="world" />
+      <param name="sim_type" type="string" value="rotors" />
+      <param name="mpc_sim" type="bool" value="false" />
+      <remap from="/vins_estimator/odometry" to="/$(arg mav_name)/ground_truth/odometry" />   
+      <remap from="/firefly/command/trajectory" to="/$(arg mav_name)/command/trajectory" />  
+      <remap from="/firefly/command/roll_pitch_yawrate_thrust" to="/$(arg mav_name)/command/roll_pitch_yawrate_thrust" />  
+  </node>  -->
+
+  </group>
+
+</launch>

@@ -1,0 +1,82 @@
+<launch>
+  <arg name="mav_name" default="firefly"/>
+  <!-- <arg name="world_name" default="$(find rotors_gazebo)/worlds/basic.world"/> -->
+  <!-- <arg name="world_name" default="$(find mav_local_planner)/worlds/maze_house.world"/> -->
+  <arg name="world_name" default="$(find rotors_gazebo)/worlds/city12_tiltedbuildings.world"/>
+  <arg name="enable_logging" default="false" />
+  <arg name="enable_ground_truth" default="true" />
+  <arg name="log_file" default="$(arg mav_name)" />
+  <arg name="debug" default="false"/>
+  <arg name="gui" default="true"/>
+  <arg name="paused" default="false"/>
+  <arg name="frame_id" default="odom" />
+  <!-- The following line causes gzmsg and gzerr messages to be printed to the console
+      (even when Gazebo is started through roslaunch) -->
+  <arg name="verbose" default="false"/>
+
+  <env name="GAZEBO_MODEL_PATH" value="${GAZEBO_MODEL_PATH}:$(find rotors_gazebo)/models"/>
+  <env name="GAZEBO_RESOURCE_PATH" value="${GAZEBO_RESOURCE_PATH}:$(find rotors_gazebo)/models"/>
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="world_name" value="$(arg world_name)" />
+    <arg name="debug" value="$(arg debug)" />
+    <arg name="paused" value="$(arg paused)" />
+    <arg name="gui" value="$(arg gui)" />
+    <arg name="verbose" value="$(arg verbose)"/>
+  </include>
+
+  <group ns="$(arg mav_name)">
+    <include file="$(find rotors_gazebo)/launch/spawn_mav.launch">
+      <arg name="mav_name" value="$(arg mav_name)" />
+      <arg name="model" value="$(find rotors_description)/urdf/mav_with_vi_sensor.gazebo" />
+      <arg name="enable_logging" value="$(arg enable_logging)" />
+      <arg name="enable_ground_truth" value="$(arg enable_ground_truth)" />
+      <arg name="log_file" value="$(arg log_file)"/>
+    </include>
+
+    <!-- Navigator-->
+    <node respawn="false" pkg="traj_gennav" type="traj_gennav_node" name="traj_gennav" output="screen">
+        <param name="frame_id" type="string" value="world" />
+        <param name="desired_distance" type="double" value="2.0" />
+        <param name="path_from_message" type="bool" value="true" />
+        <param name="sim_type" type="string" value="rotors" />
+        <rosparam file="$(find traj_gennav)/paths/path.yaml"/>
+  <!--       <remap from="/vins_estimator/odometry" to="/NTU_internal/drone_feedback" />      
+   -->      <remap from="/vins_estimator/odometry" to="/$(arg mav_name)/ground_truth/odometry" />  
+         <remap from="/firefly/command/trajectory" to="/$(arg mav_name)/command/trajectory" />  
+      
+    </node>
+
+    <!-- Controller-->
+    <node respawn="false" pkg="tcc" type="tcc" name="tcc" output="screen">
+        <param name="frame_id" type="string" value="world" />
+        <param name="sim_type" type="string" value="rotors" />
+        <param name="mpc_sim" type="bool" value="false" />
+  <!--       <remap from="/vins_estimator/odometry" to="/viral2_odometry/pred_odom" />   
+   -->      <remap from="/vins_estimator/odometry" to="/$(arg mav_name)/ground_truth/odometry" />   
+        <remap from="/firefly/command/trajectory" to="/$(arg mav_name)/command/trajectory" />  
+        <remap from="/firefly/command/roll_pitch_yawrate_thrust" to="/$(arg mav_name)/command/roll_pitch_yawrate_thrust" />  
+    </node>  
+
+    <node name="PID_attitude_controller" pkg="mav_lowlevel_attitude_controller" type="mav_pid_attitude_controller_node" respawn="true" clear_params="true" output="screen">
+      <remap from="odometry" to="ground_truth/odometry" />
+      <rosparam file="$(find mav_lowlevel_attitude_controller)/resources/PID_attitude_$(arg mav_name).yaml" />
+    </node>
+
+
+    <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
+
+    <!-- Transforms -->
+    <node pkg="tf" type="static_transform_publisher" name="world_odom_broadcaster" args="0 0 0 0 0 0 1 world odom 100" />
+  </group>
+  
+<!--     <node name="lidar_X_Y_plane_segmentation" pkg="lidar_X_Y_plane_segmentation" type="lidar_X_Y_plane_segmentation" output="screen">
+        <remap from="/os1_cloud_node/points" to="/velodyne_points" />      
+       <remap from="/os1_cloud_node/points" to="/os1_cloud_node1/points" />      
+    </node> -->
+
+ <!-- Visualization-->
+  <node pkg="rviz" type="rviz" name="rviz11" args="-d $(find traj_gennav)/rviz/rviz.rviz"/>
+
+  <!-- Mapping and Planning -->
+  <!-- <include file="$(find mav_local_planner)/launch/firefly_mapping_planning.launch"/> -->
+</launch>
