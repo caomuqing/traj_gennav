@@ -104,6 +104,7 @@ add_executable(
   include/traj_gennav/Vec3f.cpp
   include/traj_gennav/Plane.cpp)
 
+add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_node_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 # set_target_properties(${PROJECT_NAME}_node PROPERTIES OUTPUT_NAME node PREFIX "")
 
