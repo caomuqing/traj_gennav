@@ -90,10 +90,10 @@ int main(int argc, char** argv){
   nominal_path_publisher = nh.advertise<nav_msgs::Path> ("/nominal_path", 1);
   odom_path_publisher = nh.advertise<nav_msgs::Path> ("/odom_path", 1);
 
-  visual_tools_.reset(new rviz_visual_tools::RvizVisualTools("/world","/plane_world"));
-  visual_tools_->loadMarkerPub();  // create publisher before waiting
-  visual_tools_->deleteAllMarkers();
-  visual_tools_->enableBatchPublishing();
+  // visual_tools_.reset(new rviz_visual_tools::RvizVisualTools("/world","/plane_world"));
+  // visual_tools_->loadMarkerPub();  // create publisher before waiting
+  // visual_tools_->deleteAllMarkers();
+  // visual_tools_->enableBatchPublishing();
 
   ros::spin();
 

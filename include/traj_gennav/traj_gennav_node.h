@@ -20,12 +20,12 @@
 #include <std_srvs/Empty.h>
 #include <std_msgs/Float32MultiArray.h>
 #include <std_msgs/Bool.h>
-#include <rviz_visual_tools/rviz_visual_tools.h>
+// #include <rviz_visual_tools/rviz_visual_tools.h>
 #include "Plane.h"
 #include <nav_msgs/Path.h>
 
-using namespace rviz_visual_tools;
-rviz_visual_tools::RvizVisualToolsPtr visual_tools_;
+// using namespace rviz_visual_tools;
+// rviz_visual_tools::RvizVisualToolsPtr visual_tools_;
 
 //ros::Publisher rpyt_command_pub;
 ros::Publisher trajectory_sim_pub, trajectory_pub;

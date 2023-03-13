@@ -29,7 +29,7 @@ find_package(catkin REQUIRED COMPONENTS
   mav_msgs
   message_generation
   ## geodetic_utils
-  rviz_visual_tools
+  #rviz_visual_tools
 )
 
 find_package(Eigen3 REQUIRED)
